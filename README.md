@@ -152,7 +152,8 @@ Notes:
 
 - Switching networks severs the browser's connection to the dashboard, because
   the Pi changes subnet. Reconnect your device to the target network, then
-  reach the Pi again by its mDNS name (`http://john.local:8080`) or its new IP.
+  reach the Pi again by its mDNS name (`http://john.local:8080`) or its new IP
+  (the Network card shows the current IP while connected).
 - The switch runs a couple of seconds *after* the button responds, in a
   detached `systemd-run` unit, so it completes even though the HTTP reply is
   cut off mid-switch.

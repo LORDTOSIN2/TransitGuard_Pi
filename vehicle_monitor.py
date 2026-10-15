@@ -549,7 +549,7 @@ def ensure_switch_profile():
     rc, out, err = _nmcli([
         "connection", "add",
         "type", "wifi",
-        "conname", WIFI_SWITCH_TARGET_SSID,
+        "con-name", WIFI_SWITCH_TARGET_SSID,
         "ifname", NM_WIFI_IFACE,
         "wifi.ssid", WIFI_SWITCH_TARGET_SSID,
         "wifi-sec.key-mgmt", "wpa-psk",
@@ -1764,8 +1764,9 @@ DASHBOARD_HTML = """
             if (!s.enabled) { card.style.display = 'none'; return; }
             card.style.display = '';
 
-            cur.textContent = s.current_ssid ? ('Connected: ' + s.current_ssid)
-                                             : 'Not connected';
+            cur.textContent = s.current_ssid
+                ? ('Connected: ' + s.current_ssid + (s.current_ip ? ' (' + s.current_ip + ')' : ''))
+                : 'Not connected';
             if (s.next_ssid && !btn.dataset.busy) {
                 btn.style.display = '';
                 btn.disabled = false;
@@ -1845,6 +1846,7 @@ def dashboard_wifi_status():
     return jsonify({
         "enabled": WIFI_SWITCH_ENABLED,
         "current_ssid": current,
+        "current_ip": get_ip_address(),
         "target_ssid": target,
         "home_ssid": home,
         "next_ssid": next_ssid,
