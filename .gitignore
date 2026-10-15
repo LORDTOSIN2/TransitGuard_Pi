@@ -18,6 +18,7 @@ venv/
 *.db-shm
 vehicle_monitor_log.csv
 *.log
+.gps_last_known.json
 
 # MediaPipe model file — large binary, download via the command in README
 # instead of committing it to the repo

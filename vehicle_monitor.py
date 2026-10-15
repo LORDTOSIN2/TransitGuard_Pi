@@ -149,6 +149,11 @@ FACE_PITCH_LIMIT_FOR_EAR = 25  # degrees
 
 GPS_UART_PORT = "/dev/serial0"
 GPS_BAUD_RATE = 9600
+# File persisted across reboots so the last known GPS fix is immediately
+# available on startup instead of waiting for a fresh cold-start acquisition.
+GPS_LAST_KNOWN_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), ".gps_last_known.json"
+)
 
 MQ3_RL_VALUE = 10.0
 MQ3_R0 = 6.78  # PLACEHOLDER — replace with your calibrated R0
@@ -531,6 +536,39 @@ def _knots_to_kmh(knots):
 # SHARED GPS STATE (updated by background thread)
 # ---------------------------
 gps_lock = threading.Lock()
+
+
+def _load_gps_last_known():
+    """Load the last known GPS fix from disk into latest_gps at startup.
+    This eliminates the 'no fix yet' period on reboot — the module can
+    immediately report the last seen position (flagged as stale/using_last_known)
+    until a new live fix arrives.  Fails silently if the file is absent or corrupt."""
+    try:
+        with open(GPS_LAST_KNOWN_PATH) as f:
+            data = json.load(f)
+        lat = float(data["latitude"])
+        lon = float(data["longitude"])
+        ts  = float(data["timestamp"])
+        # Sanity bounds — reject obviously corrupt values
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            return lat, lon, ts
+    except Exception:
+        pass
+    return None, None, None
+
+
+def _save_gps_last_known(lat, lon, timestamp):
+    """Persist the most recent valid GPS fix to disk so the next boot
+    can pre-populate last_known without waiting for a fresh satellite lock."""
+    try:
+        with open(GPS_LAST_KNOWN_PATH, "w") as f:
+            json.dump({"latitude": lat, "longitude": lon, "timestamp": timestamp}, f)
+    except Exception:
+        pass  # non-critical — failure just means the old file stays or is absent
+
+
+_boot_lat, _boot_lon, _boot_ts = _load_gps_last_known()
+
 latest_gps = {
     "latitude": None,
     "longitude": None,
@@ -539,10 +577,12 @@ latest_gps = {
     "last_update": None,
     # Separately tracked so a lost fix never loses the vehicle's last
     # confirmed position — only ever updated on an actual valid fix.
-    "last_known_latitude": None,
-    "last_known_longitude": None,
-    "last_known_time": None,
+    # Pre-populated from disk so the first boot is not a blank slate.
+    "last_known_latitude": _boot_lat,
+    "last_known_longitude": _boot_lon,
+    "last_known_time": _boot_ts,
 }
+del _boot_lat, _boot_lon, _boot_ts  # clean up boot-time temporaries
 
 
 def gps_reader_thread():
@@ -577,6 +617,8 @@ def gps_reader_thread():
                     latest_gps["last_known_latitude"] = msg.latitude
                     latest_gps["last_known_longitude"] = msg.longitude
                     latest_gps["last_known_time"] = time.time()
+                    # Persist to disk — next boot will pre-load this immediately
+                    _save_gps_last_known(msg.latitude, msg.longitude, latest_gps["last_known_time"])
                 else:
                     latest_gps["fix_valid"] = False
                 latest_gps["last_update"] = time.time()
@@ -980,83 +1022,493 @@ def _mjpeg_generator():
 
 DASHBOARD_HTML = """
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="dark">
 <head>
     <title>TransitGuard Live Monitor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: -apple-system, sans-serif; background: #111; color: #eee;
-               margin: 0; padding: 16px; }
-        h1 { font-size: 20px; margin-bottom: 12px; }
-        .layout { display: flex; flex-wrap: wrap; gap: 20px; }
-        img { max-width: 100%; width: 640px; border-radius: 8px; border: 2px solid #333; }
-        .panel { background: #1c1c1c; border-radius: 8px; padding: 16px; min-width: 260px; }
-        .row { display: flex; justify-content: space-between; padding: 6px 0;
-               border-bottom: 1px solid #2a2a2a; font-size: 14px; }
-        .row span:first-child { color: #999; }
-        .state { font-size: 22px; font-weight: bold; padding: 10px; border-radius: 6px;
-                 text-align: center; margin-bottom: 12px; }
-        .NORMAL { background: #1e4620; color: #6fdc76; }
-        .DROWSY { background: #4a3b12; color: #ffcc4d; }
-        .CRITICAL_FATIGUE { background: #4a1414; color: #ff5c5c; }
-        .ALCOHOL_ALERT { background: #3a1a4a; color: #d98cff; }
+        /* ── CSS custom properties for theme switching ── */
+        :root[data-theme="dark"] {
+            --bg:          #111214;
+            --bg-panel:    #1a1c1f;
+            --bg-card:     #212428;
+            --border:      #2e3035;
+            --text-primary:#e8eaed;
+            --text-muted:  #7a7f8a;
+            --accent:      #4fc3f7;
+            --accent-dim:  rgba(79,195,247,0.12);
+            --cam-border:  #2e3035;
+            --toggle-bg:   #2e3035;
+            --toggle-icon: "☀";
+        }
+        :root[data-theme="light"] {
+            --bg:          #e8eaed;
+            --bg-panel:    #f5f6f8;
+            --bg-card:     #ffffff;
+            --border:      #d1d4da;
+            --text-primary:#1a1c20;
+            --text-muted:  #6b7280;
+            --accent:      #0284c7;
+            --accent-dim:  rgba(2,132,199,0.10);
+            --cam-border:  #d1d4da;
+            --toggle-bg:   #d1d4da;
+            --toggle-icon: "☽";
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        /* ── Top header bar ── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 20px;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+        }
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: var(--accent-dim);
+            padding: 3px 9px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+        .live-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #ef4444;
+            animation: blink 1.2s infinite;
+        }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+        .device-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        /* ── Theme toggle button ── */
+        .theme-toggle {
+            background: var(--toggle-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 5px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-primary);
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .theme-toggle:hover { background: var(--accent-dim); border-color: var(--accent); }
+        .toggle-icon { font-size: 15px; }
+
+        /* ── Main layout ── */
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            grid-template-rows: auto auto;
+            gap: 12px;
+            padding: 14px 20px 20px;
+            height: calc(100vh - 53px);
+        }
+
+        /* ── Camera panel ── */
+        .cam-panel {
+            grid-row: 1 / 3;
+            background: #000;
+            border-radius: 10px;
+            border: 1px solid var(--cam-border);
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cam-panel img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        /* HUD overlays on camera */
+        .cam-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+        }
+        .cam-label {
+            position: absolute;
+            top: 12px; left: 14px;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #e8eaed;
+        }
+        .cam-state-badge {
+            position: absolute;
+            top: 12px; right: 14px;
+        }
+
+        /* ── Right column panels ── */
+        .right-col {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* ── State card (top-right) ── */
+        .state-card {
+            background: var(--bg-panel);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            padding: 14px 16px;
+        }
+        .state-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+        .state-badge {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            text-align: center;
+            width: 100%;
+        }
+        .NORMAL         { background: rgba(34,197,94,0.15);  color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+        .DROWSY         { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+        .CRITICAL_FATIGUE { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+        .ALCOHOL_ALERT  { background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
+
+        /* ── Metrics card ── */
+        .metrics-card {
+            background: var(--bg-panel);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            padding: 14px 16px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .metrics-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .metric-row:last-child { border-bottom: none; }
+        .metric-label {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .metric-value {
+            color: var(--text-primary);
+            font-weight: 700;
+            font-size: 13px;
+            font-variant-numeric: tabular-nums;
+        }
+        .metric-value.good   { color: #4ade80; }
+        .metric-value.warn   { color: #fbbf24; }
+        .metric-value.alert  { color: #f87171; }
+        .metric-value.accent { color: var(--accent); }
+        .metric-value.muted  { color: var(--text-muted); }
+
+        /* ── Bottom strip: system status ── */
+        .status-strip {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            grid-column: 1 / 3;
+        }
+        .status-chip {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .chip-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        .chip-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        .chip-value.on  { color: #f87171; }
+        .chip-value.off { color: var(--text-muted); }
+        .chip-value.online { color: #4ade80; }
+        .chip-value.offline { color: #fbbf24; }
+
+        /* ── Responsive fallback ── */
+        @media (max-width: 768px) {
+            .main {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+                height: auto;
+            }
+            .cam-panel { grid-row: auto; aspect-ratio: 16/9; }
+            .right-col { flex-direction: row; flex-wrap: wrap; }
+            .state-card, .metrics-card { flex: 1 1 240px; }
+            .status-strip { grid-column: 1; grid-template-columns: repeat(2, 1fr); }
+        }
     </style>
 </head>
 <body>
-    <h1>TransitGuard Live Monitor</h1>
-    <div class="layout">
-        <img src="/video_feed" alt="Live camera feed">
-        <div class="panel">
-            <div id="state" class="state NORMAL">NORMAL</div>
-            <div class="row"><span>EAR</span><span id="ear">--</span></div>
-            <div class="row"><span>MAR</span><span id="mar">--</span></div>
-            <div class="row"><span>PERCLOS</span><span id="perclos">--</span></div>
-            <div class="row"><span>Head pitch</span><span id="pitch">--</span></div>
-            <div class="row"><span>GPS</span><span id="gps">--</span></div>
-            <div class="row"><span>MQ-3 ratio</span><span id="alcohol">--</span></div>
-            <div class="row"><span>Network</span><span id="network">--</span></div>
-            <div class="row"><span>Offline buffer</span><span id="buffer">--</span></div>
-            <div class="row"><span>Buzzer</span><span id="buzzer">--</span></div>
-            <div class="row"><span>LCD</span><span id="lcd">--</span></div>
-            <div class="row"><span>Last update</span><span id="updated">--</span></div>
+    <!-- ── Top bar ── -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <span class="logo">TransitGuard</span>
+            <div class="live-badge">
+                <div class="live-dot"></div>
+                LIVE MONITOR
+            </div>
+        </div>
+        <div class="topbar-right">
+            <span class="device-label" id="last-updated">--</span>
+            <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">
+                <span class="toggle-icon" id="toggle-icon">☀</span>
+                <span id="toggle-label">Light</span>
+            </button>
         </div>
     </div>
+
+    <!-- ── Main grid ── -->
+    <div class="main">
+        <!-- Camera panel -->
+        <div class="cam-panel">
+            <img src="/video_feed" alt="Live camera feed">
+            <div class="cam-overlay">
+                <div class="cam-label">DRIVER CAM · FHD</div>
+                <div class="cam-state-badge">
+                    <div id="state-overlay" class="state-badge NORMAL" style="font-size:13px;padding:5px 12px;">NORMAL</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right column -->
+        <div class="right-col">
+            <!-- Driver state card -->
+            <div class="state-card">
+                <div class="state-title">Driver State</div>
+                <div id="state" class="state-badge NORMAL">NORMAL</div>
+            </div>
+
+            <!-- Live metrics card -->
+            <div class="metrics-card">
+                <div class="metrics-title">Live Metrics</div>
+
+                <div class="metric-row">
+                    <span class="metric-label">EAR</span>
+                    <span class="metric-value" id="ear">--</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">MAR</span>
+                    <span class="metric-value" id="mar">--</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">PERCLOS</span>
+                    <span class="metric-value" id="perclos">--</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">Head Pitch</span>
+                    <span class="metric-value" id="pitch">--</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">GPS</span>
+                    <span class="metric-value accent" id="gps">--</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">MQ-3 Ratio</span>
+                    <span class="metric-value" id="alcohol">--</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">LCD Msg</span>
+                    <span class="metric-value muted" id="lcd">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status strip -->
+        <div class="status-strip">
+            <div class="status-chip">
+                <span class="chip-label">Network</span>
+                <span class="chip-value" id="network">--</span>
+            </div>
+            <div class="status-chip">
+                <span class="chip-label">Offline Buffer</span>
+                <span class="chip-value" id="buffer">--</span>
+            </div>
+            <div class="status-chip">
+                <span class="chip-label">Buzzer</span>
+                <span class="chip-value" id="buzzer">--</span>
+            </div>
+            <div class="status-chip">
+                <span class="chip-label">Last Update</span>
+                <span class="chip-value accent" id="updated">--</span>
+            </div>
+        </div>
+    </div>
+
     <script>
+        /* ── Theme toggle ── */
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            const icon  = document.getElementById('toggle-icon');
+            const label = document.getElementById('toggle-label');
+            if (theme === 'dark') {
+                icon.textContent  = '\\u2600';  // ☀
+                label.textContent = 'Light';
+            } else {
+                icon.textContent  = '\\u263D';  // ☽
+                label.textContent = 'Dark';
+            }
+            try { localStorage.setItem('tg_theme', theme); } catch(e) {}
+        }
+        function toggleTheme() {
+            const cur = document.documentElement.getAttribute('data-theme');
+            applyTheme(cur === 'dark' ? 'light' : 'dark');
+        }
+        // Restore saved preference on load
+        (function() {
+            try {
+                const saved = localStorage.getItem('tg_theme');
+                if (saved === 'light' || saved === 'dark') applyTheme(saved);
+            } catch(e) {}
+        })();
+
+        /* ── Data refresh ── */
         async function refresh() {
-            const res = await fetch('/data');
-            const m = await res.json();
+            let m;
+            try {
+                const res = await fetch('/data');
+                m = await res.json();
+            } catch(e) { return; }
 
+            // State
             const stateEl = document.getElementById('state');
+            const stateOv = document.getElementById('state-overlay');
             stateEl.textContent = m.driver_state;
-            stateEl.className = 'state ' + m.driver_state;
+            stateEl.className   = 'state-badge ' + m.driver_state;
+            stateOv.textContent = m.driver_state;
+            stateOv.className   = 'state-badge ' + m.driver_state;
 
-            document.getElementById('ear').textContent = m.ear !== null ? m.ear.toFixed(3) : '--';
-            document.getElementById('mar').textContent = m.mar !== null ? m.mar.toFixed(3) : '--';
-            document.getElementById('perclos').textContent = m.perclos !== null ? (m.perclos*100).toFixed(1) + '%' : '--';
-            document.getElementById('pitch').textContent = m.pitch !== null ? m.pitch.toFixed(1) + '°' : '--';
+            // Helper to set value + optional colour class
+            function setVal(id, text, cls) {
+                const el = document.getElementById(id);
+                el.textContent = text;
+                if (cls) {
+                    el.className = 'metric-value ' + cls;
+                }
+            }
 
+            setVal('ear',     m.ear     !== null ? m.ear.toFixed(3)              : '--');
+            setVal('mar',     m.mar     !== null ? m.mar.toFixed(3)              : '--');
+            setVal('perclos', m.perclos !== null ? (m.perclos*100).toFixed(1)+'%' : '--');
+            setVal('pitch',   m.pitch   !== null ? m.pitch.toFixed(1)+'\\u00b0'   : '--');
+
+            // GPS
             let gpsText = 'no fix yet';
+            let gpsCls  = 'muted';
             if (m.fix_valid) {
                 gpsText = m.latitude.toFixed(5) + ', ' + m.longitude.toFixed(5);
+                gpsCls  = 'accent';
             } else if (m.using_last_known && m.latitude !== null) {
-                gpsText = m.latitude.toFixed(5) + ', ' + m.longitude.toFixed(5) +
-                          ' (stale ' + Math.round(m.location_age_sec) + 's)';
+                gpsText = m.latitude.toFixed(5) + ', ' + m.longitude.toFixed(5)
+                        + ' (stale ' + Math.round(m.location_age_sec) + 's)';
+                gpsCls  = 'warn';
             }
-            document.getElementById('gps').textContent = gpsText;
+            setVal('gps', gpsText, gpsCls);
 
-            document.getElementById('alcohol').textContent = m.alcohol_ratio !== null ? m.alcohol_ratio.toFixed(2) : '--';
-            document.getElementById('network').textContent = m.network_online ? 'Online (WiFi)' : 'Offline (LoRa fallback)';
+            // Alcohol
+            const alcVal = m.alcohol_ratio !== null ? m.alcohol_ratio.toFixed(2) : '--';
+            const alcCls = m.alcohol_ratio !== null && m.alcohol_ratio > 0.4 ? 'alert' : '';
+            setVal('alcohol', alcVal, alcCls);
+
+            // LCD
+            setVal('lcd', m.lcd_message || '--');
+
+            // Status strip
+            const netEl = document.getElementById('network');
+            netEl.textContent = m.network_online ? 'Online (WiFi)' : 'Offline (LoRa)';
+            netEl.className   = 'chip-value ' + (m.network_online ? 'online' : 'offline');
+
             document.getElementById('buffer').textContent = m.buffer_count + ' pending';
-            document.getElementById('buzzer').textContent = m.buzzer_active ? 'ON' : 'off';
-            document.getElementById('lcd').textContent = m.lcd_message || '--';
+
+            const buzEl = document.getElementById('buzzer');
+            buzEl.textContent = m.buzzer_active ? 'ON' : 'off';
+            buzEl.className   = 'chip-value ' + (m.buzzer_active ? 'on' : 'off');
+
             document.getElementById('updated').textContent = m.updated_at || '--';
+            document.getElementById('last-updated').textContent = m.updated_at ? ('Updated ' + m.updated_at) : '';
         }
+
         setInterval(refresh, 1000);
         refresh();
     </script>
 </body>
 </html>
 """
+
 
 
 @dashboard_app.route("/")
