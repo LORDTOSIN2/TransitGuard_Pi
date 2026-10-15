@@ -465,24 +465,28 @@ def get_cpu_load():
 
 
 def get_wifi_info():
-    """Returns (ssid, rssi_dbm) for wlan0, or (None, None) if unavailable."""
-    try:
-        ssid = subprocess.check_output(
-            ["iwgetid", "-r"], stderr=subprocess.DEVNULL, timeout=2
-        ).decode().strip() or None
-    except Exception:
-        ssid = None
+    """Returns (ssid, rssi_dbm) for wlan0, or (None, None) if unavailable.
+
+    Uses nmcli for the SSID and /proc/net/wireless for the signal level,
+    because iwgetid/iwconfig/iw are not installed on minimal Bookworm
+    images — the previous implementation silently returned (None, None),
+    blanking wifiSsid/wifiRssi in every telemetry packet."""
+    ssid = get_current_ssid()
 
     rssi = None
     try:
-        output = subprocess.check_output(
-            ["iwconfig", "wlan0"], stderr=subprocess.DEVNULL, timeout=2
-        ).decode()
-        for token in output.split():
-            if token.startswith("level="):
-                rssi = int(token.replace("level=", "").split("dBm")[0])
+        with open("/proc/net/wireless") as fh:
+            for line in fh:
+                if not line.lstrip().startswith(NM_WIFI_IFACE + ":"):
+                    continue
+                # e.g. " wlan0: 0000  47.  -63.  -256  0  0  ..."
+                #           [status, link, level_dbm, noise, ...]
+                fields = line.split(":", 1)[1].split()
+                if len(fields) >= 3:
+                    rssi = int(float(fields[2].rstrip(".")))
+                break
     except Exception:
-        pass
+        rssi = None
 
     return ssid, rssi
 
@@ -497,12 +501,16 @@ def get_wifi_info():
 NM_WIFI_IFACE = "wlan0"
 
 
-def _nmcli(args, timeout=20):
-    """Run `nmcli` with passwordless sudo. Returns (returncode, stdout, stderr)."""
+def _nmcli(args, timeout=20, use_sudo=True):
+    """Run `nmcli`. Returns (returncode, stdout, stderr).
+
+    Read-only queries work unprivileged (use_sudo=False) and avoid a sudo
+    round-trip on the telemetry hot path; profile create/modify/activate
+    needs root, which the service user has via passwordless sudo."""
     try:
+        cmd = (["sudo", "-n"] if use_sudo else []) + ["nmcli"] + [str(a) for a in args]
         proc = subprocess.run(
-            ["sudo", "-n", "nmcli"] + [str(a) for a in args],
-            capture_output=True, text=True, timeout=timeout,
+            cmd, capture_output=True, text=True, timeout=timeout,
         )
         return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
     except Exception as exc:  # noqa: BLE001 — surface any failure to the caller
@@ -511,10 +519,12 @@ def _nmcli(args, timeout=20):
 
 def get_current_ssid():
     """SSID currently associated on wlan0, or None if not connected."""
-    rc, name, _ = _nmcli(["-g", "GENERAL.CONNECTION", "device", "show", NM_WIFI_IFACE])
+    rc, name, _ = _nmcli(["-g", "GENERAL.CONNECTION", "device", "show", NM_WIFI_IFACE],
+                         use_sudo=False)
     if rc != 0 or not name or name == "--":
         return None
-    rc2, ssid, _ = _nmcli(["-g", "802-11-wireless.ssid", "connection", "show", name])
+    rc2, ssid, _ = _nmcli(["-g", "802-11-wireless.ssid", "connection", "show", name],
+                          use_sudo=False)
     return ssid.strip() or None
 
 
@@ -523,14 +533,15 @@ def _find_connection_by_ssid(ssid):
     `ssid`, or None."""
     if not ssid:
         return None
-    rc, out, _ = _nmcli(["-t", "-f", "NAME,TYPE", "connection", "show"])
+    rc, out, _ = _nmcli(["-t", "-f", "NAME,TYPE", "connection", "show"], use_sudo=False)
     if rc != 0:
         return None
     for line in out.splitlines():
         name, _, ctype = line.rpartition(":")
         if ctype != "802-11-wireless" or not name:
             continue
-        rc2, s, _ = _nmcli(["-g", "802-11-wireless.ssid", "connection", "show", name])
+        rc2, s, _ = _nmcli(["-g", "802-11-wireless.ssid", "connection", "show", name],
+                           use_sudo=False)
         if rc2 == 0 and s.strip() == ssid:
             return name
     return None
