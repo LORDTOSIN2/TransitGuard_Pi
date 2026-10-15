@@ -1,0 +1,35 @@
+# Secrets — never commit real credentials
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+fatigue-env/
+venv/
+
+# Runtime-generated data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+vehicle_monitor_log.csv
+*.log
+
+# MediaPipe model file — large binary, download via the command in README
+# instead of committing it to the repo
+face_landmarker.task
+
+# OS/editor junk
+.DS_Store
+*.swp
+
+# Old scratch/prototype files on Pi
+fatigue_monitor*
+fatigue_monotor
+vehicle_monitor[0-9]*.py
+calibrate_ear2.py
+

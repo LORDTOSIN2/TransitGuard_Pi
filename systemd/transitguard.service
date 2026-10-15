@@ -1,0 +1,20 @@
+# Install to /etc/systemd/system/transitguard.service
+# Adjust User, WorkingDirectory, and ExecStart paths to match your setup.
+
+[Unit]
+Description=TransitGuard Vehicle Monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/transitguard
+EnvironmentFile=/etc/transitguard.env
+ExecStart=/home/pi/transitguard/venv/bin/python3 /home/pi/transitguard/vehicle_monitor.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

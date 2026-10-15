@@ -1,0 +1,202 @@
+2026-10-15T16:11:24+01:00
+2026-10-15T15:11:24+00:00
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+Linux john 6.12.93+rpt-rpi-v8 #1 SMP PREEMPT Debian 1:6.12.93-1+rpt1 (2026-06-12) aarch64 GNU/Linux
+Python 3.11.2
+absl-py==2.5.0
+Adafruit-Blinka==9.2.0
+Adafruit-Blinka-Raspberry-Pi5-Neopixel==1.0.0rc2
+adafruit-circuitpython-ads1x15==3.0.5
+adafruit-circuitpython-busdevice==5.2.17
+adafruit-circuitpython-connectionmanager==3.1.8
+adafruit-circuitpython-requests==4.1.17
+adafruit-circuitpython-typing==1.12.3
+Adafruit-PlatformDetect==3.89.1
+Adafruit-PureIO==1.1.11
+attrs==26.1.0
+binho-host-adapter==0.1.6
+blinker==1.9.0
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+click==8.5.0
+contourpy==1.3.3
+cycler==0.12.1
+Flask==3.1.3
+flatbuffers==25.12.19
+fonttools==4.64.0
+idna==3.19
+itsdangerous==2.2.0
+Jinja2==3.1.6
+kiwisolver==1.5.1
+lgpio==0.2.2.0
+MarkupSafe==3.0.3
+matplotlib==3.11.1
+mediapipe==0.10.9
+numpy==2.4.6
+opencv-contrib-python==5.0.0.93
+opencv-python==5.0.0.93
+packaging==26.3
+pillow==12.3.0
+protobuf==3.20.3
+psutil==7.2.2
+pycparser==3.0
+pyftdi==0.57.2
+pynmea2==1.19.0
+pyparsing==3.3.2
+pyserial==3.5
+python-dateutil==2.9.0.post0
+pyusb==1.3.1
+requests==2.34.2
+RPi.GPIO==0.7.1
+rpi_ws281x==5.0.0
+RPLCD==1.4.0
+six==1.17.0
+sounddevice==0.5.6
+sysv_ipc==1.2.0
+typing_extensions==4.16.0
+urllib3==2.7.0
+Werkzeug==3.1.8
+Name: opencv-python
+Version: 5.0.0.93
+Summary: Wrapper package for OpenCV python bindings.
+Home-page: https://github.com/opencv/opencv-python
+Author: 
+Author-email: 
+License: Apache 2.0
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: numpy
+Required-by: 
+---
+Name: mediapipe
+Version: 0.10.9
+Summary: MediaPipe is the simplest way for researchers and developers to build world-class ML solutions and applications for mobile, edge, cloud and the web.
+Home-page: https://github.com/google/mediapipe
+Author: The MediaPipe Authors
+Author-email: mediapipe@google.com
+License: Apache 2.0
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: absl-py, attrs, flatbuffers, matplotlib, numpy, opencv-contrib-python, protobuf, sounddevice
+Required-by: 
+---
+Name: numpy
+Version: 2.4.6
+Summary: Fundamental package for array computing in Python
+Home-page: https://numpy.org
+Author: Travis E. Oliphant et al.
+Author-email: 
+License-Expression: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: 
+Required-by: contourpy, matplotlib, mediapipe, opencv-contrib-python, opencv-python
+---
+Name: pyserial
+Version: 3.5
+Summary: Python Serial Port Extension
+Home-page: https://github.com/pyserial/pyserial
+Author: Chris Liechti
+Author-email: cliechti@gmx.net
+License: BSD
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: 
+Required-by: binho-host-adapter, pyftdi
+---
+Name: pynmea2
+Version: 1.19.0
+Summary: Python library for the NMEA 0183 protcol
+Home-page: https://github.com/Knio/pynmea2
+Author: Tom Flanagan
+Author-email: tom@zkpq.ca
+License: MIT
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: 
+Required-by: 
+---
+Name: Adafruit-Blinka
+Version: 9.2.0
+Summary: CircuitPython APIs for non-CircuitPython versions of Python such as CPython on Linux and MicroPython.
+Home-page: https://github.com/adafruit/Adafruit_Blinka
+Author: Adafruit Industries
+Author-email: circuitpython@adafruit.com
+License: MIT
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: Adafruit-Blinka-Raspberry-Pi5-Neopixel, adafruit-circuitpython-typing, Adafruit-PlatformDetect, Adafruit-PureIO, binho-host-adapter, lgpio, pyftdi, RPi.GPIO, rpi_ws281x, sysv_ipc
+Required-by: adafruit-circuitpython-ads1x15, adafruit-circuitpython-busdevice, adafruit-circuitpython-connectionmanager, adafruit-circuitpython-requests, adafruit-circuitpython-typing
+---
+Name: adafruit-circuitpython-ads1x15
+Version: 3.0.5
+Summary: CircuitPython library for controlling an ADS1x15 ADC.
+Home-page: https://github.com/adafruit/Adafruit_CircuitPython_ADS1x15
+Author: 
+Author-email: Adafruit Industries <circuitpython@adafruit.com>
+License-Expression: MIT
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: Adafruit-Blinka, adafruit-circuitpython-busdevice, typing-extensions
+Required-by: 
+---
+Name: RPi.GPIO
+Version: 0.7.1
+Summary: A module to control Raspberry Pi GPIO channels
+Home-page: http://sourceforge.net/projects/raspberry-gpio-python/
+Author: Ben Croston
+Author-email: ben@croston.org
+License: MIT
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: 
+Required-by: Adafruit-Blinka
+---
+Name: requests
+Version: 2.34.2
+Summary: Python HTTP for Humans.
+Home-page: 
+Author: 
+Author-email: Kenneth Reitz <me@kennethreitz.org>
+License: Apache-2.0
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: certifi, charset_normalizer, idna, urllib3
+Required-by: 
+---
+Name: psutil
+Version: 7.2.2
+Summary: Cross-platform lib for process and system monitoring.
+Home-page: https://github.com/giampaolo/psutil
+Author: Giampaolo Rodola
+Author-email: g.rodola@gmail.com
+License: BSD-3-Clause
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: 
+Required-by: 
+---
+Name: RPLCD
+Version: 1.4.0
+Summary: A Raspberry Pi LCD library for the widely used Hitachi HD44780 controller.
+Home-page: https://github.com/dbrgn/RPLCD
+Author: Danilo Bargen
+Author-email: mail@dbrgn.ch
+License: MIT
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: 
+Required-by: 
+---
+Name: Flask
+Version: 3.1.3
+Summary: A simple framework for building complex web applications.
+Home-page: 
+Author: 
+Author-email: 
+License-Expression: BSD-3-Clause
+Location: /home/john/fatigue/fatigue-env/lib/python3.11/site-packages
+Requires: blinker, click, itsdangerous, jinja2, markupsafe, werkzeug
+Required-by: 
+fatal: not a git repository (or any of the parent directories): .git
+7c0241cb6e1083a76f6b42c5fcda3a8e346c1259e443cb5401226ce2972718a4  vehicle_monitor.py
+64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff  face_landmarker.task
+sha256sum: requirements.txt: No such file or directory

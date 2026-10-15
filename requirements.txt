@@ -1,0 +1,12 @@
+opencv-python
+mediapipe
+numpy
+pyserial
+pynmea2
+adafruit-blinka
+adafruit-circuitpython-ads1x15
+RPi.GPIO
+requests
+psutil
+RPLCD
+flask

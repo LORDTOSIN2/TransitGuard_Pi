@@ -1,0 +1,13 @@
+3:53 pm 10/15/2026
+
+Powerbank is 20,000mah
+
+Host: john (Raspberry Pi 4, 8GB RAM)
+OS: Debian GNU/Linux 12 (Bookworm, aarch64)
+Kernel: 6.12.93+rpt-rpi-v8
+TransitGuard Service: active (Serving on port 8080)
+Memory: 7.1 GiB available / 7.6 GiB total
+Storage: /dev/mmcblk0p2 has 407 MB free (94% used)
+Core Temp: ~79.8°C
+
+
