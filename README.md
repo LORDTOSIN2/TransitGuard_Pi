@@ -23,6 +23,9 @@ audible/visual alerts and a live browser dashboard.
 - **Local driver-facing alerts** — 16x2 LCD (4-bit mode) + buzzer
 - **Live browser dashboard** — video feed + real-time metrics, served over the
   LAN, no monitor needed on the Pi itself
+- **Manual Wi-Fi switching** — optional dashboard button to hop between the
+  normal network and a secondary saved network, reverting to the normal one on
+  reboot (see below)
 - **Performance-tuned** — threaded camera capture and non-blocking
   network/radio/actuator I/O so slow Wi-Fi or LoRa never stalls the camera loop
 
@@ -116,6 +119,47 @@ Once running, the live dashboard (video feed + metrics) is available at:
 ```
 http://<pi-ip-address>:8080
 ```
+
+## Switching Wi-Fi from the dashboard (optional)
+
+If the Pi normally sits on one hotspot but occasionally needs another (e.g. a
+lab/campus AP), the dashboard can expose a **Network** card with a button that
+switches between the two — without giving up the safe default:
+
+- On boot the Pi always joins the profile that has `autoconnect=yes` (the
+  normal network). Nothing changes that.
+- The button activates a *second* saved profile on demand. That profile is
+  stored with `autoconnect=no`, so **a power cycle always returns the Pi to the
+  normal network** — switching is session-only by design.
+- The button is bi-directional: on the normal network it offers the secondary
+  one, and vice-versa.
+- If the secondary AP disappears while in use, NetworkManager falls back to the
+  normal network on its own.
+
+Configure it in the env file (never commit the password to the repo — the repo
+is public):
+
+```
+WIFI_SWITCH_ENABLED=true
+WIFI_SWITCH_TARGET_SSID=My Other Network
+WIFI_SWITCH_TARGET_PASSWORD=the-password
+WIFI_SWITCH_HOME_SSID=My Normal Network
+```
+
+Leave `WIFI_SWITCH_TARGET_SSID` blank to hide the card entirely.
+
+Notes:
+
+- Switching networks severs the browser's connection to the dashboard, because
+  the Pi changes subnet. Reconnect your device to the target network, then
+  reach the Pi again by its mDNS name (`http://john.local:8080`) or its new IP.
+- The switch runs a couple of seconds *after* the button responds, in a
+  detached `systemd-run` unit, so it completes even though the HTTP reply is
+  cut off mid-switch.
+- The endpoint is unauthenticated, like the rest of the dashboard — anyone on
+  the LAN can press it. Keep the dashboard on a trusted network.
+- Requires `nmcli` (NetworkManager) and passwordless `sudo` for the service
+  user.
 
 ## Auto-run on boot (systemd)
 

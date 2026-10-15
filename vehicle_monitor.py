@@ -83,6 +83,7 @@ import threading
 import queue
 import signal
 import subprocess
+import shlex
 from collections import deque
 
 import requests
@@ -217,6 +218,23 @@ ENABLE_PREVIEW = os.environ.get("ENABLE_PREVIEW", "true").strip().lower() in ("1
 ENABLE_DASHBOARD = os.environ.get("ENABLE_DASHBOARD", "true").strip().lower() in ("1", "true", "yes")
 DASHBOARD_HOST = "0.0.0.0"
 DASHBOARD_PORT = int(os.environ.get("DASHBOARD_PORT", "8080"))
+
+# --- Optional manual Wi-Fi switch (dashboard button) -----------------------
+# The Pi always boots onto whichever profile has autoconnect=yes (normally
+# the primary/home hotspot). These settings expose a dashboard button that
+# lets an operator manually hop to a second saved SSID. The second profile is
+# deliberately stored with autoconnect=no, so a power cycle always returns to
+# the primary network — the switch is session-only by design.
+#
+# Credentials live in /etc/transitguard.env (root-only) or a local .env;
+# never commit them to the repo.
+WIFI_SWITCH_TARGET_SSID = os.environ.get("WIFI_SWITCH_TARGET_SSID", "").strip()
+WIFI_SWITCH_TARGET_PASSWORD = os.environ.get("WIFI_SWITCH_TARGET_PASSWORD", "")
+WIFI_SWITCH_HOME_SSID = os.environ.get("WIFI_SWITCH_HOME_SSID", "").strip()
+WIFI_SWITCH_ENABLED = (
+    os.environ.get("WIFI_SWITCH_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+    and bool(WIFI_SWITCH_TARGET_SSID)
+)
 
 if not DEVICE_TOKEN:
     print("WARNING: TRANSITGUARD_DEVICE_TOKEN is not set. Every upload will "
@@ -467,6 +485,103 @@ def get_wifi_info():
         pass
 
     return ssid, rssi
+
+
+# ---------------------------
+# MANUAL WI-FI SWITCH (NetworkManager)
+# ---------------------------
+# Shared by the dashboard button. Matches profiles by *SSID* rather than by
+# connection name, because the two often differ (the home profile here is
+# named "preconfigured", not "Redmi 14C"). Uses nmcli instead of iwgetid/
+# iwconfig, which are not present on minimal Bookworm images.
+NM_WIFI_IFACE = "wlan0"
+
+
+def _nmcli(args, timeout=20):
+    """Run `nmcli` with passwordless sudo. Returns (returncode, stdout, stderr)."""
+    try:
+        proc = subprocess.run(
+            ["sudo", "-n", "nmcli"] + [str(a) for a in args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+    except Exception as exc:  # noqa: BLE001 — surface any failure to the caller
+        return 1, "", str(exc)
+
+
+def get_current_ssid():
+    """SSID currently associated on wlan0, or None if not connected."""
+    rc, name, _ = _nmcli(["-g", "GENERAL.CONNECTION", "device", "show", NM_WIFI_IFACE])
+    if rc != 0 or not name or name == "--":
+        return None
+    rc2, ssid, _ = _nmcli(["-g", "802-11-wireless.ssid", "connection", "show", name])
+    return ssid.strip() or None
+
+
+def _find_connection_by_ssid(ssid):
+    """Return the NetworkManager connection *name* whose wireless SSID is
+    `ssid`, or None."""
+    if not ssid:
+        return None
+    rc, out, _ = _nmcli(["-t", "-f", "NAME,TYPE", "connection", "show"])
+    if rc != 0:
+        return None
+    for line in out.splitlines():
+        name, _, ctype = line.rpartition(":")
+        if ctype != "802-11-wireless" or not name:
+            continue
+        rc2, s, _ = _nmcli(["-g", "802-11-wireless.ssid", "connection", "show", name])
+        if rc2 == 0 and s.strip() == ssid:
+            return name
+    return None
+
+
+def ensure_switch_profile():
+    """Ensure a saved profile exists for the secondary SSID, with autoconnect
+    disabled so it can never take over the boot network. Returns (ok, name_or_error)."""
+    if not WIFI_SWITCH_TARGET_SSID:
+        return False, "WIFI_SWITCH_TARGET_SSID is not configured"
+    name = _find_connection_by_ssid(WIFI_SWITCH_TARGET_SSID)
+    if name:
+        # Belt-and-braces: make sure it can never hijack the boot network.
+        _nmcli(["connection", "modify", name, "connection.autoconnect", "no"])
+        return True, name
+    rc, out, err = _nmcli([
+        "connection", "add",
+        "type", "wifi",
+        "conname", WIFI_SWITCH_TARGET_SSID,
+        "ifname", NM_WIFI_IFACE,
+        "wifi.ssid", WIFI_SWITCH_TARGET_SSID,
+        "wifi-sec.key-mgmt", "wpa-psk",
+        "wifi-sec.psk", WIFI_SWITCH_TARGET_PASSWORD,
+        "connection.autoconnect", "no",
+        "ipv4.method", "auto",
+        "ipv6.method", "auto",
+    ])
+    if rc != 0:
+        return False, (err or out or "nmcli connection add failed")
+    return True, WIFI_SWITCH_TARGET_SSID
+
+
+def schedule_wifi_switch(profile_name, delay=2.0):
+    """Fire-and-forget: wait `delay` seconds, then activate the named profile.
+
+    Runs detached via a transient systemd unit so the switch still completes
+    after the dashboard HTTP request is cut off (the Pi leaves the current
+    subnet the moment the new profile comes up)."""
+    cmd = f"sleep {float(delay):.1f}; nmcli connection up {shlex.quote(profile_name)}"
+    unit = f"tg-wifi-switch-{int(time.time())}"
+    try:
+        subprocess.Popen(
+            ["sudo", "-n", "systemd-run", "--no-block", "--collect",
+             "--unit", unit, "/bin/sh", "-c", cmd],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"Wi-Fi switch: failed to schedule -> {exc}")
+        return False
 
 
 def build_telemetry_payload(ear, mar, perclos, pitch, yaw, roll, location, alcohol,
@@ -1202,6 +1317,35 @@ DASHBOARD_HTML = """
         .theme-toggle:hover { background: var(--accent-dim); border-color: var(--accent); }
         .toggle-icon { font-size: 15px; }
 
+        /* ── Wi-Fi switch card ── */
+        .wifi-current {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            word-break: break-word;
+        }
+        .wifi-btn {
+            width: 100%;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+            transition: background 0.2s, color 0.2s;
+        }
+        .wifi-btn:hover:not(:disabled) { background: var(--accent); color: #fff; }
+        .wifi-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .wifi-note {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+
         /* ── Main layout ── */
         .main {
             display: grid;
@@ -1457,6 +1601,14 @@ DASHBOARD_HTML = """
                     <span class="metric-value muted" id="lcd">--</span>
                 </div>
             </div>
+
+            <!-- Wi-Fi switch card (shown only when the feature is enabled) -->
+            <div class="state-card" id="wifi-card" style="display:none">
+                <div class="state-title">Network</div>
+                <div class="wifi-current" id="wifi-current">--</div>
+                <button class="wifi-btn" id="wifi-btn" onclick="switchWifi()">Switch</button>
+                <div class="wifi-note" id="wifi-note"></div>
+            </div>
         </div>
 
         <!-- Status strip -->
@@ -1598,6 +1750,63 @@ DASHBOARD_HTML = """
             document.getElementById('last-updated').textContent = m.updated_at ? ('Updated ' + m.updated_at) : '';
         }
 
+        /* ── Wi-Fi switch ── */
+        async function refreshWifi() {
+            let s;
+            try {
+                const res = await fetch('/wifi/status');
+                s = await res.json();
+            } catch (e) { return; }
+
+            const card = document.getElementById('wifi-card');
+            const cur  = document.getElementById('wifi-current');
+            const btn  = document.getElementById('wifi-btn');
+            if (!s.enabled) { card.style.display = 'none'; return; }
+            card.style.display = '';
+
+            cur.textContent = s.current_ssid ? ('Connected: ' + s.current_ssid)
+                                             : 'Not connected';
+            if (s.next_ssid && !btn.dataset.busy) {
+                btn.style.display = '';
+                btn.disabled = false;
+                btn.textContent = 'Switch to ' + s.next_ssid;
+            } else if (!s.next_ssid) {
+                btn.style.display = 'none';
+            }
+        }
+
+        async function switchWifi() {
+            const btn  = document.getElementById('wifi-btn');
+            const note = document.getElementById('wifi-note');
+            const proceed = confirm('Switch the Pi to a different Wi-Fi network? ' +
+                'This dashboard disconnects immediately. Reconnect this device ' +
+                'to the new network (then use john.local) to reach it again.');
+            if (!proceed) { return; }
+
+            btn.dataset.busy = '1';
+            btn.disabled = true;
+            btn.textContent = 'Switching...';
+            note.textContent = 'Switching network - this page will lose connection.';
+            try {
+                const res = await fetch('/wifi/switch', { method: 'POST' });
+                const r = await res.json();
+                if (r.ok) {
+                    note.textContent = 'Switching to ' + r.switching_to +
+                        '. Rejoin that network, then reload john.local:8080.';
+                } else {
+                    btn.disabled = false;
+                    delete btn.dataset.busy;
+                    btn.textContent = 'Retry';
+                    note.textContent = 'Failed: ' + (r.error || 'unknown error');
+                }
+            } catch (e) {
+                note.textContent = 'Switching - rejoin the target network to continue.';
+            }
+        }
+
+        setInterval(refreshWifi, 5000);
+        refreshWifi();
+
         setInterval(refresh, 1000);
         refresh();
     </script>
@@ -1621,6 +1830,63 @@ def dashboard_video_feed():
 def dashboard_data():
     with dashboard_lock:
         return jsonify(dict(latest_metrics))
+
+
+@dashboard_app.route("/wifi/status")
+def dashboard_wifi_status():
+    """Report the current SSID and which network the switch button would go to."""
+    current = get_current_ssid()
+    target = WIFI_SWITCH_TARGET_SSID or None
+    home = WIFI_SWITCH_HOME_SSID or None
+    if current and target and current == target:
+        next_ssid = home          # already on the secondary network -> offer to go home
+    else:
+        next_ssid = target        # default -> offer the secondary network
+    return jsonify({
+        "enabled": WIFI_SWITCH_ENABLED,
+        "current_ssid": current,
+        "target_ssid": target,
+        "home_ssid": home,
+        "next_ssid": next_ssid,
+    })
+
+
+@dashboard_app.route("/wifi/switch", methods=["POST"])
+def dashboard_wifi_switch():
+    """Toggle between the home and secondary networks. Responds immediately,
+    then performs the switch ~2 s later in a detached process, because the
+    Pi's Wi-Fi change severs this very HTTP connection."""
+    if not WIFI_SWITCH_ENABLED:
+        return jsonify({"ok": False, "error": "Wi-Fi switch is not enabled"}), 403
+
+    current = get_current_ssid()
+    if current and WIFI_SWITCH_TARGET_SSID and current == WIFI_SWITCH_TARGET_SSID:
+        dest_ssid, going_to_target = WIFI_SWITCH_HOME_SSID, False
+    else:
+        dest_ssid, going_to_target = WIFI_SWITCH_TARGET_SSID, True
+
+    if not dest_ssid:
+        return jsonify({"ok": False, "error": "destination SSID is not configured"}), 400
+
+    if going_to_target:
+        ok, info = ensure_switch_profile()
+        if not ok:
+            return jsonify({"ok": False, "error": info}), 500
+        profile_name = info
+    else:
+        profile_name = _find_connection_by_ssid(dest_ssid)
+        if not profile_name:
+            return jsonify({"ok": False, "error": f"no saved profile for {dest_ssid!r}"}), 500
+
+    if not schedule_wifi_switch(profile_name):
+        return jsonify({"ok": False, "error": "could not schedule the switch"}), 500
+
+    return jsonify({
+        "ok": True,
+        "switching_to": dest_ssid,
+        "profile": profile_name,
+        "note": f"Reconnect this device to '{dest_ssid}' to reach the dashboard again.",
+    })
 
 
 def dashboard_server_thread():
