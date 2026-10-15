@@ -19,6 +19,7 @@ venv/
 vehicle_monitor_log.csv
 *.log
 .gps_last_known.json
+.gps_last_known.json.tmp
 
 # MediaPipe model file — large binary, download via the command in README
 # instead of committing it to the repo

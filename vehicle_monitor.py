@@ -73,6 +73,7 @@ import RPi.GPIO as GPIO
 import time
 import csv
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -154,6 +155,11 @@ GPS_BAUD_RATE = 9600
 GPS_LAST_KNOWN_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), ".gps_last_known.json"
 )
+# RMC sentences arrive at 1 Hz (faster on some modules), but the on-disk copy
+# only has to be good enough for the next boot, so it is refreshed on a timer
+# rather than on every fix — while still capturing real movement promptly.
+GPS_LAST_KNOWN_MIN_INTERVAL_SEC = 30.0   # periodic refresh while parked
+GPS_LAST_KNOWN_MIN_MOVE_M = 50.0         # …or once the vehicle moved this far
 
 MQ3_RL_VALUE = 10.0
 MQ3_R0 = 6.78  # PLACEHOLDER — replace with your calibrated R0
@@ -538,6 +544,39 @@ def _knots_to_kmh(knots):
 gps_lock = threading.Lock()
 
 
+def _format_age(seconds):
+    """Compact human-readable age for a stale position: '45s', '2m 14s',
+    '1h 3m', '3d 4h'. Mirrors fmtAge() in the dashboard JS, so the video
+    overlay and the web page never describe the same number differently."""
+    if seconds is None:
+        return "unknown"
+    seconds = int(round(max(0.0, float(seconds))))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, secs = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {secs}s"
+    hours, mins = divmod(minutes, 60)
+    if hours < 24:
+        return f"{hours}h {mins}m"
+    days, hrs = divmod(hours, 24)
+    return f"{days}d {hrs}h"
+
+
+def _meters_between(lat1, lon1, lat2, lon2):
+    """Rough equirectangular distance in metres — accurate enough for a
+    'has the vehicle moved?' threshold, and needs no extra dependency."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = phi2 - phi1
+    d_lambda = math.radians(lon2 - lon1) * math.cos((phi1 + phi2) / 2.0)
+    return 6371000.0 * math.sqrt(d_phi * d_phi + d_lambda * d_lambda)
+
+
+# Mirrors what the file on disk currently holds, so a repeat fix for the same
+# spot does not trigger a write. Seeded from the file at startup (below).
+_gps_last_known_on_disk = {"latitude": None, "longitude": None, "timestamp": None}
+
+
 def _load_gps_last_known():
     """Load the last known GPS fix from disk into latest_gps at startup.
     This eliminates the 'no fix yet' period on reboot — the module can
@@ -559,15 +598,48 @@ def _load_gps_last_known():
 
 def _save_gps_last_known(lat, lon, timestamp):
     """Persist the most recent valid GPS fix to disk so the next boot
-    can pre-populate last_known without waiting for a fresh satellite lock."""
+    can pre-populate last_known without waiting for a fresh satellite lock.
+
+    Throttled: the GPS streams RMC sentences continuously, but the file only
+    has to be fresh enough for the next boot, so it is rewritten at most once
+    per GPS_LAST_KNOWN_MIN_INTERVAL_SEC — or sooner once the vehicle has
+    actually moved GPS_LAST_KNOWN_MIN_MOVE_M.
+
+    The write goes to a sibling .tmp file that is then renamed into place with
+    os.replace(), which is atomic: a crash, a full disk or a kill mid-write
+    can never leave a half-written file for the next boot to parse — a
+    reader sees either the previous file or the new one.
+    """
+    on_disk = _gps_last_known_on_disk
+    prev_ts, prev_lat, prev_lon = (on_disk["timestamp"], on_disk["latitude"],
+                                   on_disk["longitude"])
+    if prev_ts is not None and prev_lat is not None:
+        if timestamp - prev_ts < GPS_LAST_KNOWN_MIN_INTERVAL_SEC:
+            if _meters_between(prev_lat, prev_lon, lat, lon) < GPS_LAST_KNOWN_MIN_MOVE_M:
+                return  # written recently enough and not going anywhere
+    tmp_path = GPS_LAST_KNOWN_PATH + ".tmp"
     try:
-        with open(GPS_LAST_KNOWN_PATH, "w") as f:
+        with open(tmp_path, "w") as f:
             json.dump({"latitude": lat, "longitude": lon, "timestamp": timestamp}, f)
+            f.flush()
+            os.fsync(f.fileno())   # do not let a power cut win the race
+        os.replace(tmp_path, GPS_LAST_KNOWN_PATH)
+        on_disk.update(timestamp=timestamp, latitude=lat, longitude=lon)
     except Exception:
-        pass  # non-critical — failure just means the old file stays or is absent
+        # non-critical — the GPS_LAST_KNOWN_PATH file is still intact, because
+        # nothing was ever written to that path directly
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
 
 
 _boot_lat, _boot_lon, _boot_ts = _load_gps_last_known()
+if _boot_lat is not None:
+    # There is already a position on disk: keep it until the vehicle moves or
+    # the refresh interval expires, instead of rewriting it on the first fix.
+    _gps_last_known_on_disk.update(latitude=_boot_lat, longitude=_boot_lon,
+                                   timestamp=_boot_ts)
 
 latest_gps = {
     "latitude": None,
@@ -1039,7 +1111,6 @@ DASHBOARD_HTML = """
             --accent-dim:  rgba(79,195,247,0.12);
             --cam-border:  #2e3035;
             --toggle-bg:   #2e3035;
-            --toggle-icon: "☀";
         }
         :root[data-theme="light"] {
             --bg:          #e8eaed;
@@ -1052,7 +1123,6 @@ DASHBOARD_HTML = """
             --accent-dim:  rgba(2,132,199,0.10);
             --cam-border:  #d1d4da;
             --toggle-bg:   #d1d4da;
-            --toggle-icon: "☽";
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1325,8 +1395,9 @@ DASHBOARD_HTML = """
         </div>
         <div class="topbar-right">
             <span class="device-label" id="last-updated">--</span>
-            <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn">
-                <span class="toggle-icon" id="toggle-icon">☀</span>
+            <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn"
+                    aria-label="Switch to light theme">
+                <span class="toggle-icon" id="toggle-icon" aria-hidden="true">☀</span>
                 <span id="toggle-label">Light</span>
             </button>
         </div>
@@ -1392,7 +1463,8 @@ DASHBOARD_HTML = """
         <div class="status-strip">
             <div class="status-chip">
                 <span class="chip-label">Network</span>
-                <span class="chip-value" id="network">--</span>
+                <span class="chip-value" id="network" role="status"
+                      aria-label="Network status unknown">--</span>
             </div>
             <div class="status-chip">
                 <span class="chip-label">Offline Buffer</span>
@@ -1400,7 +1472,8 @@ DASHBOARD_HTML = """
             </div>
             <div class="status-chip">
                 <span class="chip-label">Buzzer</span>
-                <span class="chip-value" id="buzzer">--</span>
+                <span class="chip-value" id="buzzer" role="status"
+                      aria-label="Buzzer status unknown">--</span>
             </div>
             <div class="status-chip">
                 <span class="chip-label">Last Update</span>
@@ -1415,12 +1488,15 @@ DASHBOARD_HTML = """
             document.documentElement.setAttribute('data-theme', theme);
             const icon  = document.getElementById('toggle-icon');
             const label = document.getElementById('toggle-label');
+            const btn   = document.getElementById('theme-btn');
             if (theme === 'dark') {
                 icon.textContent  = '\\u2600';  // ☀
                 label.textContent = 'Light';
+                btn.setAttribute('aria-label', 'Switch to light theme');
             } else {
                 icon.textContent  = '\\u263D';  // ☽
                 label.textContent = 'Dark';
+                btn.setAttribute('aria-label', 'Switch to dark theme');
             }
             try { localStorage.setItem('tg_theme', theme); } catch(e) {}
         }
@@ -1435,6 +1511,21 @@ DASHBOARD_HTML = """
                 if (saved === 'light' || saved === 'dark') applyTheme(saved);
             } catch(e) {}
         })();
+
+        /* Age of a stale position in a form a human can read at a glance:
+           '45s', '2m 14s', '1h 3m', '3d 4h'. Mirrors _format_age() in the
+           Python overlay. */
+        function fmtAge(seconds) {
+            if (seconds === null || seconds === undefined || isNaN(seconds)) return 'unknown';
+            let s = Math.round(Math.max(0, seconds));
+            if (s < 60) return s + 's';
+            const m = Math.floor(s / 60); s = s % 60;
+            if (m < 60) return m + 'm ' + s + 's';
+            const h = Math.floor(m / 60), rm = m % 60;
+            if (h < 24) return h + 'h ' + rm + 'm';
+            const d = Math.floor(h / 24), rh = h % 24;
+            return d + 'd ' + rh + 'h';
+        }
 
         /* ── Data refresh ── */
         async function refresh() {
@@ -1474,7 +1565,7 @@ DASHBOARD_HTML = """
                 gpsCls  = 'accent';
             } else if (m.using_last_known && m.latitude !== null) {
                 gpsText = m.latitude.toFixed(5) + ', ' + m.longitude.toFixed(5)
-                        + ' (stale ' + Math.round(m.location_age_sec) + 's)';
+                        + ' (stale ' + fmtAge(m.location_age_sec) + ')';
                 gpsCls  = 'warn';
             }
             setVal('gps', gpsText, gpsCls);
@@ -1487,16 +1578,21 @@ DASHBOARD_HTML = """
             // LCD
             setVal('lcd', m.lcd_message || '--');
 
-            // Status strip
+            // Status strip — colours are backed by text and by aria-labels,
+            // so no state is carried by colour alone.
             const netEl = document.getElementById('network');
             netEl.textContent = m.network_online ? 'Online (WiFi)' : 'Offline (LoRa)';
             netEl.className   = 'chip-value ' + (m.network_online ? 'online' : 'offline');
+            netEl.setAttribute('aria-label', m.network_online
+                ? 'Network online, using WiFi'
+                : 'Network offline, using LoRa fallback');
 
             document.getElementById('buffer').textContent = m.buffer_count + ' pending';
 
             const buzEl = document.getElementById('buzzer');
             buzEl.textContent = m.buzzer_active ? 'ON' : 'off';
             buzEl.className   = 'chip-value ' + (m.buzzer_active ? 'on' : 'off');
+            buzEl.setAttribute('aria-label', m.buzzer_active ? 'Buzzer on' : 'Buzzer off');
 
             document.getElementById('updated').textContent = m.updated_at || '--';
             document.getElementById('last-updated').textContent = m.updated_at ? ('Updated ' + m.updated_at) : '';
@@ -1794,8 +1890,7 @@ def main():
         if location["fix_valid"]:
             loc_text = f"GPS: {location['latitude']:.5f}, {location['longitude']:.5f}"
         elif location.get("using_last_known"):
-            age = location.get("location_age_sec") or 0
-            loc_text = (f"GPS(stale {age:.0f}s): "
+            loc_text = (f"GPS(stale {_format_age(location.get('location_age_sec'))}): "
                         f"{location['latitude']:.5f}, {location['longitude']:.5f}")
         else:
             loc_text = "GPS: no fix yet"
