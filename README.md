@@ -124,6 +124,12 @@ Once running, the live dashboard (video feed + metrics) is available at:
 http://<pi-ip-address>:8080
 ```
 
+**Pi temperature:** open `http://<pi-ip-address>:8080/temperature` (alias `/temp`)
+for a large, colour-coded SoC temperature readout with a HOT banner at ≥ 80 °C. The
+same value also appears on the main dashboard — top bar, Live Metrics card and status
+strip. Levels: **cool** < 70 °C, **warm** 70–80 °C, **hot** 80–85 °C, **critical** ≥ 85 °C
+(the Pi's soft limit).
+
 ## Switching Wi-Fi from the dashboard (optional)
 
 If the Pi normally sits on one hotspot but occasionally needs another (e.g. a

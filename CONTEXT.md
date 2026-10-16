@@ -82,12 +82,22 @@ the IoT repo's [`CONTEXT.md`](https://github.com/LORDTOSIN2/TransitGuard-IoT/blo
 |---|---|
 | `GET /` | HTML dashboard (live video + metrics) |
 | `GET /video_feed` | MJPEG stream |
-| `GET /data` | JSON metrics: `driver_state`, `ear/mar/perclos/pitch`, `latitude/longitude/fix_valid`, `sats_used/sats_in_view/best_snr/fix_quality`, `buffer_count`, `alert_coalesced`, `updated_at` |
+| `GET /data` | JSON metrics: `driver_state`, `ear/mar/perclos/pitch`, `latitude/longitude/fix_valid`, `sats_used/sats_in_view/best_snr/fix_quality`, `buffer_count`, `alert_coalesced`, `pi_temperature`, `pi_temp_level`, `pi_throttled`, `updated_at` |
 | `GET /wifi/status` | Current SSID + which network the switch button would target |
 | `POST /wifi/switch` | Performs the Wi-Fi switch (see §5) |
+| `GET /temperature` (alias `/temp`) | Dedicated Pi SoC temperature page — big colour-coded readout, throttling note, HOT banner |
+| `GET /temperature/data` | JSON feed for that page: `temperature`, `level`, `throttled`, `note`, `updated_at` |
 
 `/data.updated_at` is the **main-loop heartbeat**. If it is `null`, the loop is not running
 (usually a camera problem) and no telemetry is being produced at all.
+
+**Pi temperature.** `GET /temperature` (alias `/temp`) is a dedicated at-a-glance page for
+SoC heat, and the main dashboard shows the same value in the top bar, the Live Metrics card
+and the status strip. Levels: **cool** < 70 °C, **warm** 70–80 °C, **hot** 80–85 °C,
+**critical** ≥ 85 °C (the Pi's soft limit). The reading comes from
+`/sys/class/thermal/thermal_zone0/temp`; the throttling flags come from
+`vcgencmd get_throttled`. Colour is never the only signal — every indicator also carries
+the value as text and in an `aria-label`.
 
 ### Deploying an update to the Pi
 
