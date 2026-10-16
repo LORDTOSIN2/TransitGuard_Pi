@@ -230,3 +230,14 @@ Verified live after deploy (`236469a`): `/data` → `frame_width 640, frame_heig
 > even though the page's computed theme is dark (`body` background `rgb(17,18,20)`,
 > `--text-primary #e8eaed`, `.cam-panel` `rgb(0,0,0)`). The fixes above were therefore
 > verified from `/data`, the DOM and computed styles rather than from a new screenshot.
+
+### F3 / F4 / F5 verified live (`TransitGuard-IoT` `91558e0` deployed)
+
+| Check | Observed on `https://transit-guard-io-t.vercel.app/` |
+|---|---|
+| Header provenance (F4) | `SUPABASE LIVE · 1 device live · +128 rt · 40 hydrated` — realtime inserts, live devices and hydrated rows are now separate (was `SUPABASE LIVE (40 pkts)`) |
+| Live device (F3) | `BUS-101` tagged **LIVE** with `EAR: --` / `PERCLOS: --` (the Pi reports `null` — no face) instead of a fabricated `0.295 / 4.2 %` |
+| Sim gate **ON** | `FLEET TOTAL 5 Nodes · 1 live · 4 sim`; roster badges `LIVE` (BUS-101) + `SIM` ×4; "Pause Sim" and the speed buttons enabled |
+| Sim gate **OFF** | roster collapses to `1 Node · 1 live · 0 sim` — only the real device remains; "Run Sim"/speed disabled |
+| Service worker (F5) | one registration, `active`; `caches.keys()` = `["transitguard-v2"]` (old `transitguard-v1` purged on activate); console clean |
+| Deploy-skew repro | a tab holding the pre-fix shell 404'd on `assets/index-Li_7Z3yw.js` (**blank app**); after one reload the new worker had purged the cache and the app booted with `__TG_MOUNTED__` true |
