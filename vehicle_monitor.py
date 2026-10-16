@@ -185,6 +185,11 @@ MQ3_VCC = 5.0
 MQ3_CURVE_A = 0.4
 MQ3_CURVE_B = -1.5
 MQ3_ALERT_RATIO_THRESHOLD = 0.4    # ALCOHOL_ALERT threshold
+# The MQ-3 ratio FALLS when alcohol is present (clean air reads ~5, a real
+# alcohol response near the sensor reads ~0.9). Ratios below this show an amber
+# "caution" on the dashboard without raising ALCOHOL_ALERT. Provisional value -
+# retune alongside MQ3_ALERT_RATIO_THRESHOLD once the sensor is calibrated.
+MQ3_CAUTION_RATIO_THRESHOLD = 1.5
 MQ3_POLL_INTERVAL_SEC = 1
 
 LORA_UART_PORT = "/dev/ttyAMA2"    # Pi 4 UART2 (GPIO0=TXD2, GPIO1=RXD2)
@@ -1988,10 +1993,21 @@ DASHBOARD_HTML = """
             }
             setVal('sats', satsText, satsCls);
 
-            // Alcohol
-            const alcVal = m.alcohol_ratio !== null ? m.alcohol_ratio.toFixed(2) : '--';
-            const alcCls = m.alcohol_ratio !== null && m.alcohol_ratio > 0.4 ? 'alert' : '';
-            setVal('alcohol', alcVal, alcCls);
+            // Alcohol - the MQ-3 ratio FALLS when alcohol is present (clean air
+            // reads ~5, a real alcohol response near the sensor reads <1), so the
+            // comparison must be '<', not '>'. Thresholds come from the device so
+            // this cannot drift from the app's own alert rule. The class is always
+            // reset so the colour cannot get stuck.
+            const alcEl = document.getElementById('alcohol');
+            alcEl.textContent = m.alcohol_ratio !== null ? m.alcohol_ratio.toFixed(2) : '--';
+            const alcAlertThr   = m.alcohol_alert_threshold   ?? 0.4;
+            const alcCautionThr = m.alcohol_caution_threshold ?? 1.5;
+            let alcCls = '';
+            if (m.alcohol_ratio !== null) {
+                if (m.alcohol_ratio < alcAlertThr)        alcCls = 'alert';
+                else if (m.alcohol_ratio < alcCautionThr) alcCls = 'warn';
+            }
+            alcEl.className = 'metric-value' + (alcCls ? ' ' + alcCls : '');
 
             // LCD
             setVal('lcd', m.lcd_message || '--');
@@ -2096,7 +2112,12 @@ def dashboard_video_feed():
 @dashboard_app.route("/data")
 def dashboard_data():
     with dashboard_lock:
-        return jsonify(dict(latest_metrics))
+        payload = dict(latest_metrics)
+    # Expose the alcohol thresholds so the dashboard's colouring cannot drift
+    # from the app's own alert rule.
+    payload["alcohol_alert_threshold"] = MQ3_ALERT_RATIO_THRESHOLD
+    payload["alcohol_caution_threshold"] = MQ3_CAUTION_RATIO_THRESHOLD
+    return jsonify(payload)
 
 
 @dashboard_app.route("/wifi/status")
