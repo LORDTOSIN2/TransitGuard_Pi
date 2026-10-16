@@ -6,7 +6,7 @@ heartbeat, JSON↔page mismatches, retained redacted screenshots + database evid
 browser/device/refresh/stale-field notes.
 
 **Date:** 2026-10-16, ~09:04–09:08 UTC (10:04–10:08 WAT)
-**Result:** both dashboards functional; **four defects** found (2 local-UI, 2 remote/data-fidelity). **F1, F2 and F7 are fixed** (`01488b9`, `236469a`) and the alcohol thresholds were retuned (`236469a`); **F3–F5 remain open**.
+**Result:** both dashboards functional; **four defects** found (2 local-UI, 2 remote/data-fidelity). **F1, F2 and F7 are fixed** (`01488b9`, `236469a`) and the alcohol thresholds were retuned (`236469a`); **F3, F4 and F5 are fixed** in `TransitGuard-IoT` `91558e0`.
 
 ---
 
@@ -127,7 +127,7 @@ WebSocket, no indicator). The live `index.html` at that moment (`Last-Modified`
 Vercel hashed-asset skew during a rollout — transient, and it self-heals on the next
 reload. Worth noting because a user hitting the site mid-deploy sees a **dead dashboard**.
 
-### 3.3 The displayed fleet is a simulator
+### 3.3 The displayed fleet was a simulator (fixed in `91558e0`)
 
 `App.tsx` calls `simulationEngine.start()` on mount — a **5-bus mock fleet**
 (NG-MN-421…425, drivers "Ibrahim Danladi", "Musa Garba", …). Real Supabase rows are fed
@@ -144,6 +144,22 @@ reload. Worth noting because a user hitting the site mid-deploy sees a **dead da
 
 Consequence: the remote dashboard is a **demo/simulation** that overlays one real device.
 It must not be read as a faithful mirror of the Pi.
+
+**Fixed in `TransitGuard-IoT` `91558e0` (F3 + F4):**
+
+* `BusVehicle.source` is `'LIVE'` or `'SIM'`, rendered as a **LIVE / SIM / STALE** badge in
+  the fleet roster, vehicle drawer and map popup, and as `N live · M sim` under
+  `FLEET TOTAL`.
+* A real device that reports an id the mock fleet owns **takes the vehicle over wholesale**
+  (the mock row is dropped), so no fabricated biometric survives the merge; the
+  simulator's `tick()` never updates a `LIVE` vehicle, and the "simulate incident" /
+  remote-actuator controls are disabled for live devices.
+* A live device with **no face in frame** (null biometrics) renders **`--`**
+  (`biometrics.isFacePresent === false`) instead of a fabricated EAR/PERCLOS/MAR.
+* The mock fleet is **gated behind a header `SIM ON/OFF` toggle**; switching it off removes
+  only simulated vehicles and never drops a real one.
+* The header now reads `N devices live · +N rt · N hydrated`, replacing the misleading
+  `SUPABASE LIVE (N pkts)` (F4).
 
 ### 3.4 Remote screenshots
 
@@ -175,9 +191,9 @@ This corroborates the remote dashboard's `SUPABASE LIVE (N pkts)` and the local
 |---|---|---|---|
 | **F1** | Local | MQ-3 ratio colour inverted (`> 0.4` vs the app's `< 0.4`) | **Fixed in `01488b9`** — compare with `<`, added a 1.5 amber caution band, thresholds now come from `/data`, class reset on every refresh. |
 | **F2** | Local | "FHD" label vs 640×480 stream | **Fixed in `236469a`** — label rendered from the frame size reported in `/data`. |
-| **F3** | Remote | Simulator presented as live; real `null`s inherit fabricated values | Show an explicit "no face / simulated" state, or stop the sim once live telemetry connects. |
-| **F4** | Remote | "SUPABASE LIVE (N pkts)" = fetch limit + increments | Separate "hydrated rows" from "live inserts"; label the limit. |
-| **F5** | Remote | Hashed-asset 404 on mid-deploy reload → blank app | Keep previous hashed assets briefly, or have the SW serve a cached shell and refresh. |
+| **F3** | Remote | Simulator presented as live; real `null`s inherit fabricated values | **Fixed in `TransitGuard-IoT` `91558e0`** — `source: LIVE/SIM` badges, real telemetry takes over colliding ids wholesale, `tick()` skips live vehicles, operator triggers disabled for live devices, null biometrics render `--`, and the mock fleet is gated behind a `SIM ON/OFF` toggle. |
+| **F4** | Remote | "SUPABASE LIVE (N pkts)" = fetch limit + increments | **Fixed in `91558e0`** — the header now separates real devices live (`N live`), realtime inserts (`+N rt`) and hydrated rows (`N hydrated`). |
+| **F5** | Remote | Hashed-asset 404 on mid-deploy reload → blank app | **Fixed in `91558e0`** — `sw.js` is network-first for navigations and only caches same-origin hashed assets (Supabase/Edge/cross-origin untouched); versioned cache purged on activate; `index.html` self-heal watchdog clears the worker + caches and reloads once if `__TG_MOUNTED__` never fires. |
 | **F6** | Local | 2 h 50 m stale last-known position shown prominently | Already flagged "stale"; consider suppressing > N minutes or showing "no current fix". |
 | **F7** | Local | On-frame HUD overlay clipped | **Fixed in `236469a`** — `object-fit: contain` (no crop) plus a frame-scaled, outlined HUD. |
 | **F8** | Local | `/data` jitter up to 187 ms; cold `/` 12.4 s | Watch for a blocking path; not reproducible (threaded server). |
@@ -186,8 +202,10 @@ This corroborates the remote dashboard's `SUPABASE LIVE (N pkts)` and the local
 **Verdict:** local dashboard is reachable, threaded, and its heartbeat is sound; the remote
 dashboard hydrates and streams correctly when its bundle loads. **F1, F2, F7 and F9 are
 fixed** (MQ-3 colour correct and thresholds retuned; camera label truthful; on-frame HUD no
-longer cropped). The remaining high-value issue is **F3** (fabricated biometrics shown as
-live on the remote dashboard); **F5** is a transient deploy-skew 404.
+longer cropped). **F3, F4 and F5 are fixed in `TransitGuard-IoT` `91558e0`** — the remote
+dashboard now distinguishes live devices from the simulator, reports honest counts, and
+self-heals instead of going blank on a mid-deploy reload. No high-value defect remains open;
+F6 (stale GPS) and F8 (`/data` jitter) are cosmetic/unreproducible.
 
 ---
 
@@ -199,6 +217,9 @@ live on the remote dashboard); **F5** is a transient deploy-skew 404.
 | F9 | `236469a` | `MQ3_ALERT_RATIO_THRESHOLD` 0.4 → **2.5**, `MQ3_CAUTION_RATIO_THRESHOLD` 1.5 → **4.0** (alert `< 2.5`, amber `2.6–4`, clean `≥ 4`). |
 | F2 | `236469a` | Hardcoded "FHD" label replaced by the real frame size (`/data` `frame_width`/`frame_height`). |
 | F7 | `236469a` | `object-fit: contain` (no crop) + frame-scaled, dark-outlined HUD text. |
+| F3 | `TransitGuard-IoT` `91558e0` | `BusVehicle.source: 'LIVE' | 'SIM'` with LIVE/SIM/STALE badges (roster, drawer, map popup, KPI bar). A real device takes over a colliding mock id *wholesale*; `tick()` skips LIVE vehicles; operator "simulate incident"/actuator controls are disabled for live devices; null biometrics render `--` (`isFacePresent`); the mock fleet is gated behind a header `SIM ON/OFF` toggle. |
+| F4 | `TransitGuard-IoT` `91558e0` | Header splits `N devices live · +N rt · N hydrated`; the 40-row fetch limit is no longer presented as a live packet count. |
+| F5 | `TransitGuard-IoT` `91558e0` | `sw.js` network-first for navigations (`cache: 'reload'`), stale-while-revalidate only for same-origin hashed assets, no interception of Supabase/Edge/cross-origin, `CACHE_VERSION` purge on activate; `index.html` watchdog unregisters the worker + clears caches and reloads once if the app never mounts. |
 
 Verified live after deploy (`236469a`): `/data` → `frame_width 640, frame_height 480`,
 `alcohol_alert_threshold 2.5`, `alcohol_caution_threshold 4.0`; the page label reads
