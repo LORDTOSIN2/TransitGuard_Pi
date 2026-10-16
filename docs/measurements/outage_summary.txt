@@ -1,0 +1,43 @@
+=== TransitGuard connection-loss & recovery trials v2 - 2026-10-16T13:53:51+01:00 ===
+app HEAD            : 668445ad1be4fdfd4e8c84b21961f58aa4388bc7
+config sha256(env)  : 288bd62f72a2032a5fbce4aa893d92be2c7262df0228a505943b7d161ad21f4b
+trace file          : /home/john/fatigue/logs/telemetry_trace_trials2.jsonl  (bytes at start: 13067)
+ingest host         : hfzqfcuezuxcgaifxqok.supabase.co
+host resolves to    : 104.18.38.10 172.64.149.246 
+blackhole ranges    : 104.18.0.0/16 172.64.0.0/16 (+ resolved /32s, re-resolved during cut)
+method              : ingest-scoped blackhole; LAN/SSH/dashboard untouched
+                      LoRa = point-to-point UART radio, no internet path, NOT tested
+timing              : cut=300s  observe<=180s  poll=5s  deadman=480s
+
+TRIAL 1  pending before outage = 0   blackhole_routes=0
+TRIAL 1  CUT      2026-10-16T13:53:54+01:00  probe_http=000  blackhole_routes=4  (want 000 and >=1)
+TRIAL 1  cut verified
+TRIAL 1  RESTORE  2026-10-16T13:59:00+01:00  probe_http=401  blackhole_routes=0  (want non-000 and 0)
+TRIAL 1  restore verified (block lifted)
+TRIAL 1  buffered during outage: peak=32  at-restore=32
+TRIAL 1  recovery: first 201 at t+5s | first LIVE 201 at t+39s | queue first empty at t+89s | remaining=0
+TRIAL 1  post-restore 201s: total=50 live=17
+TRIAL 1  RECOVERY NOT CONFIRMED
+
+TRIAL 2  pending before outage = 0   blackhole_routes=0
+TRIAL 2  CUT      2026-10-16T14:02:02+01:00  probe_http=000  blackhole_routes=4  (want 000 and >=1)
+TRIAL 2  cut verified
+TRIAL 2  RESTORE  2026-10-16T14:07:09+01:00  probe_http=000  blackhole_routes=0  (want non-000 and 0)
+TRIAL 2  !! RESTORE INCOMPLETE
+TRIAL 2  buffered during outage: peak=30  at-restore=30
+TRIAL 2  recovery: first 201 at t+7s | first LIVE 201 at t+7s | queue first empty at t+123s | remaining=0
+TRIAL 2  post-restore 201s: total=49 live=19
+TRIAL 2  RECOVERY NOT CONFIRMED
+
+TRIAL 3  pending before outage = 0   blackhole_routes=0
+TRIAL 3  CUT      2026-10-16T14:10:16+01:00  probe_http=000  blackhole_routes=4  (want 000 and >=1)
+TRIAL 3  cut verified
+TRIAL 3  RESTORE  2026-10-16T14:15:18+01:00  probe_http=401  blackhole_routes=0  (want non-000 and 0)
+TRIAL 3  restore verified (block lifted)
+TRIAL 3  buffered during outage: peak=30  at-restore=30
+TRIAL 3  recovery: first 201 at t+9s | first LIVE 201 at t+40s | queue first empty at t+102s | remaining=0
+TRIAL 3  post-restore 201s: total=51 live=20
+TRIAL 3  RECOVERY NOT CONFIRMED
+
+leak checks (empty = no cut leak): 0 line(s)
+=== run complete 2026-10-16T14:18:24+01:00  blackhole_routes=0 ===

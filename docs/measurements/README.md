@@ -9,6 +9,11 @@ explains the artifacts and how to reproduce them.
 > alert burst in run 3), 99.66 % delivery vs attempted, HTTP RTT median 1.65 s / p95 3.79 s.
 > The study also found and fixed a 49 % alert-message loss defect (`46077a2`).
 
+> **A separate connection-loss & recovery study** — three 5-minute ingest outages on the same
+> hotspot — is in [`connection_loss_report.md`](connection_loss_report.md):
+> **3 / 3 trials recovered, 0 messages dropped, 93 / 93 outage-scheduled messages stored
+> server-side**. Its artifacts use the `outage_*` / `telemetry_trace_outage.*` names.
+
 ## Naming
 
 The measurement tools (`tools/analyze_session.py`, `tools/export_messages.py`,
@@ -31,6 +36,12 @@ The measurement tools (`tools/analyze_session.py`, `tools/export_messages.py`,
 | `session_charts_run1.png` | 1 | charts |
 | `session_charts_run2.png` | 2 | charts |
 | `stability_report.md` | all | the written report |
+| `connection_loss_report.md` | – | the connection-loss & recovery report (3 × 5 min outages) |
+| `telemetry_trace_outage.jsonl` | – | raw trace for the three outage trials |
+| `outage_poll.csv` | – | 5 s poll (buffer / network / temp / throttled / blackhole count) during the outages |
+| `outage_summary.txt` | – | harness log: cut/restore assertions, per-trial recovery lines, leaks |
+| `outage_leaks.txt` | – | cut-leak checks — **empty (0 lines) = no leak** |
+| `outage_summary.json` | – | machine-readable per-trial outage summary (from `analyze_outage.py`) |
 
 ## Reproducing a session
 
@@ -47,6 +58,28 @@ python tools/chart_session.py                                      # -> session_
 # 3. IMPORTANT: remove TELEMETRY_TRACE_PATH and restart again.
 #    Tracing grows ~5.8 MB/day and the Pi's disk runs at ~91 % used.
 ```
+
+## Reproducing the connection-loss trials
+
+```bash
+# On the Pi: point tracing at a dedicated file via a systemd drop-in, then restart.
+#   /etc/systemd/system/transitguard.service.d/zz-outage-test.conf
+#   [Service]
+#   Environment=TELEMETRY_TRACE_PATH=/home/john/fatigue/logs/telemetry_trace_trials2.jsonl
+sudo systemctl daemon-reload && sudo systemctl restart transitguard
+
+sh tools/run_outage_trials.sh        # 3 x (5 min ingest blackhole + up to 3 min observe)
+
+# Pull outage_poll.csv / outage_summary.txt / outage_leaks.txt / telemetry_trace_outage.jsonl,
+# then reconcile locally (prints the harness verdict AND the corrected verdict):
+python tools/analyze_outage.py outage_poll.csv outage_summary.txt telemetry_trace_outage.jsonl
+
+# Teardown: remove the drop-in, daemon-reload, restart, confirm TELEMETRY_TRACE_PATH is gone.
+```
+
+The harness black-holes **only** the Supabase ingest route (Cloudflare ranges + resolved /32s),
+so SSH and the LAN dashboard stay up. LoRa is a point-to-point UART radio with no internet path
+and is **not** part of this test.
 
 ## Caveats
 

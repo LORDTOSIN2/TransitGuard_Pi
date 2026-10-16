@@ -214,6 +214,12 @@ repo. The **un-suffixed names are run 3** — they are the canonical filenames t
 `analyze_session.py`, `export_messages.py` and `chart_session.py` hardcode, which is why
 the raw traces are stored under those names.
 
+> **Companion study — failure behaviour.** This report measures the *healthy* path. What
+> happens when that path **disappears for 5 minutes** and returns is measured in
+> [`connection_loss_report.md`](connection_loss_report.md): three ingest outages,
+> **3 / 3 recovered, 0 messages dropped, 93 / 93 outage-scheduled messages stored**, with the
+> SQLite store-and-forward buffer draining to zero in 89–123 s each time.
+
 ## 10. Reproduction
 
 ```bash

@@ -25,7 +25,8 @@ TransitGuard is a driver-fatigue and vehicle-monitoring system split across **tw
 
 The Pi is the data source; Supabase is the store and the ingest path; the Vercel dashboard is the
 consumer. **The upload path (Pi → Edge Function → Postgres → dashboard) is the subject of the
-connection-stability measurement documented in `docs/measurements/stability_report.md`.**
+connection-stability measurement documented in `docs/measurements/stability_report.md`, and its
+failure behaviour in `docs/measurements/connection_loss_report.md`.**
 
 ---
 
@@ -46,7 +47,8 @@ fleet, gates the simulator behind a toggle and ships a network-first service wor
 the IoT repo's [`CONTEXT.md`](https://github.com/LORDTOSIN2/TransitGuard-IoT/blob/main/CONTEXT.md).
 
 > **Committed measurement records** live in this repo under [`docs/measurements/`](docs/measurements/)
-> (the three-run connection-stability study plus the raw traces, CSVs and charts) and
+> (the three-run connection-stability study plus the raw traces, CSVs and charts, **and the
+> connection-loss & recovery study** in `connection_loss_report.md`) and
 > [`docs/dashboard-test/`](docs/dashboard-test/) (the local + remote dashboard test, including
 > redacted screenshots and the DB evidence). The **unredacted** campaign files stay in
 > `C:\Users\Administrator\Documents\Default Project`.
@@ -264,6 +266,14 @@ Backups exist alongside it: `/etc/transitguard.env.bak-run2-*`, `.bak-run3-*`, `
   **Turn it off afterwards** — it grows ~5.8 MB/day and the disk is ~91 % full.
 * Tools in `TransitGuard_Pi/tools/`: `analyze_session.py` (trace ↔ Supabase reconciler),
   `chart_session.py` (matplotlib charts), `export_messages.py` (per-message CSV).
+* **Connection-loss & recovery.** `tools/run_outage_trials.sh` black-holes **only** the Supabase
+  ingest route (Cloudflare ranges + resolved /32s) for 3 × 5 min, asserting the cut/restore and
+  using `tools/analyze_outage.py` to reconcile the trace against Supabase. Results (2026-10-16):
+  **3 / 3 recovered, 0 dropped, 93 / 93 outage-scheduled messages stored**, buffer → 0 in
+  89–123 s — see [`docs/measurements/connection_loss_report.md`](docs/measurements/connection_loss_report.md).
+  It pairs with a temporary trace drop-in
+  (`/etc/systemd/system/transitguard.service.d/zz-outage-test.conf`) that **must be removed
+  afterwards**.
 * `transitguard-repo/README.md` has a "Measuring connection stability" section describing the
   trace format, duplicate handling and clock caveats.
 

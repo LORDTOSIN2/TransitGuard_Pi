@@ -236,6 +236,16 @@ Two notes on interpreting the numbers:
   NTP-synchronised. Report RTT separately, and document clock sync before
   quoting end-to-end figures.
 
+### Connection-loss & recovery
+
+`tools/run_outage_trials.sh` black-holes **only** the Supabase ingest route
+(Cloudflare ranges + resolved /32s — SSH and the LAN dashboard stay up) for three
+5-minute trials, asserting the cut and restore and measuring how long the SQLite
+store-and-forward buffer takes to drain. `tools/analyze_outage.py` reconciles the
+resulting trace against Supabase. The 2026-10-16 results — **3 / 3 recovered,
+0 messages dropped, 93 / 93 outage-scheduled messages stored** — are in
+[`docs/measurements/connection_loss_report.md`](docs/measurements/connection_loss_report.md).
+
 ## Known gaps vs. original project objectives
 
 This implementation currently diverges from the original thesis objectives
