@@ -39,7 +39,8 @@ connection-stability measurement documented in `docs/measurements/stability_repo
 Both are **public**. `TransitGuard_Pi` is the repo that is actually cloned onto the Pi.
 
 **On the Pi**, the same repo is checked out at `/home/john/fatigue` (same `origin`).
-As of writing: `TransitGuard_Pi` @ `f6ae50a`, `TransitGuard-IoT` @ `91558e0`. The IoT
+As of writing, the **code** state is `TransitGuard_Pi` @ `668445a` (the checkout on the Pi)
+and `TransitGuard-IoT` @ `91558e0`; later commits in both repos are documentation only. The IoT
 dashboard now tags every vehicle `LIVE` vs `SIM`, prefers real telemetry over the demo
 fleet, gates the simulator behind a toggle and ships a network-first service worker — see
 the IoT repo's [`CONTEXT.md`](https://github.com/LORDTOSIN2/TransitGuard-IoT/blob/main/CONTEXT.md).
