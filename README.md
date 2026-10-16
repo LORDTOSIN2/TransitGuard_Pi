@@ -5,6 +5,10 @@ real-time driver fatigue detection, GPS tracking, alcohol sensing, and
 dual-path telemetry (Wi-Fi/cellular primary, LoRa fallback) with local
 audible/visual alerts and a live browser dashboard.
 
+> **New here, or handing this over?** Read **[CONTEXT.md](CONTEXT.md)** first. It documents
+> the two repositories, the Pi's layout and SSH access, the Wi-Fi/hotspot switching,
+> Supabase, the telemetry/queue behaviour, the measurement tooling, and current gotchas.
+
 ## Features
 
 - **Driver fatigue detection** — MediaPipe Face Landmarker (Tasks API), computing
