@@ -184,12 +184,14 @@ MQ3_R0 = 6.78  # PLACEHOLDER — replace with your calibrated R0
 MQ3_VCC = 5.0
 MQ3_CURVE_A = 0.4
 MQ3_CURVE_B = -1.5
-MQ3_ALERT_RATIO_THRESHOLD = 0.4    # ALCOHOL_ALERT threshold
-# The MQ-3 ratio FALLS when alcohol is present (clean air reads ~5, a real
-# alcohol response near the sensor reads ~0.9). Ratios below this show an amber
-# "caution" on the dashboard without raising ALCOHOL_ALERT. Provisional value -
-# retune alongside MQ3_ALERT_RATIO_THRESHOLD once the sensor is calibrated.
-MQ3_CAUTION_RATIO_THRESHOLD = 1.5
+# The MQ-3 ratio FALLS when alcohol is present (clean air reads ~5.x, a real
+# alcohol response near the sensor reads ~0.9). Below ALERT -> ALCOHOL_ALERT
+# (red + buzzer); ALERT..CAUTION -> amber caution on the dashboard only;
+# >= CAUTION -> clean. Retuned 2026-10-16 from field observation: a real
+# alcohol response sits around 0.88, so the previous 0.4 alert threshold could
+# never fire. Re-check against a clean-vs-alcohol calibration sweep.
+MQ3_ALERT_RATIO_THRESHOLD = 2.5
+MQ3_CAUTION_RATIO_THRESHOLD = 4.0
 MQ3_POLL_INTERVAL_SEC = 1
 
 LORA_UART_PORT = "/dev/ttyAMA2"    # Pi 4 UART2 (GPIO0=TXD2, GPIO1=RXD2)
@@ -1427,10 +1429,19 @@ latest_metrics = {
     "network_online": True, "buffer_count": 0,
     "alert_coalesced": 0,
     "buzzer_active": False, "lcd_message": None,
+    "frame_width": None, "frame_height": None,
     "updated_at": None,
 }
 
 dashboard_app = Flask(__name__)
+
+
+def _put_hud_text(frame, text, org, scale, color, thickness):
+    """Draw HUD text over a dark outline so it stays readable on any frame."""
+    cv2.putText(frame, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale,
+                (0, 0, 0), thickness + 2, cv2.LINE_AA)
+    cv2.putText(frame, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale,
+                color, thickness, cv2.LINE_AA)
 
 
 def update_dashboard_frame(frame):
@@ -1441,6 +1452,10 @@ def update_dashboard_frame(frame):
     if ok:
         with dashboard_lock:
             latest_frame_jpeg = buf.tobytes()
+            # Publish the true frame size so the UI label can never claim a
+            # resolution the camera is not actually delivering.
+            latest_metrics["frame_width"] = int(frame.shape[1])
+            latest_metrics["frame_height"] = int(frame.shape[0])
 
 
 def update_dashboard_metrics(**kwargs):
@@ -1623,7 +1638,10 @@ DASHBOARD_HTML = """
         .cam-panel img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            /* contain, not cover: the JPEG carries a burned-in HUD, so the frame
+               must never be cropped. The panel background is black, so any
+               letterbox bars are invisible. */
+            object-fit: contain;
             display: block;
         }
         /* HUD overlays on camera */
@@ -1805,7 +1823,7 @@ DASHBOARD_HTML = """
         <div class="cam-panel">
             <img src="/video_feed" alt="Live camera feed">
             <div class="cam-overlay">
-                <div class="cam-label">DRIVER CAM · FHD</div>
+                <div class="cam-label" id="cam-label">DRIVER CAM</div>
                 <div class="cam-state-badge">
                     <div id="state-overlay" class="state-badge NORMAL" style="font-size:13px;padding:5px 12px;">NORMAL</div>
                 </div>
@@ -1994,14 +2012,14 @@ DASHBOARD_HTML = """
             setVal('sats', satsText, satsCls);
 
             // Alcohol - the MQ-3 ratio FALLS when alcohol is present (clean air
-            // reads ~5, a real alcohol response near the sensor reads <1), so the
-            // comparison must be '<', not '>'. Thresholds come from the device so
-            // this cannot drift from the app's own alert rule. The class is always
-            // reset so the colour cannot get stuck.
+            // reads ~5.x, a real alcohol response near the sensor reads ~0.9), so
+            // the comparison must be '<', not '>'. Thresholds come from the device
+            // so this cannot drift from the app's own alert rule. The class is
+            // always reset so the colour cannot get stuck.
             const alcEl = document.getElementById('alcohol');
             alcEl.textContent = m.alcohol_ratio !== null ? m.alcohol_ratio.toFixed(2) : '--';
-            const alcAlertThr   = m.alcohol_alert_threshold   ?? 0.4;
-            const alcCautionThr = m.alcohol_caution_threshold ?? 1.5;
+            const alcAlertThr   = m.alcohol_alert_threshold   ?? 2.5;
+            const alcCautionThr = m.alcohol_caution_threshold ?? 4.0;
             let alcCls = '';
             if (m.alcohol_ratio !== null) {
                 if (m.alcohol_ratio < alcAlertThr)        alcCls = 'alert';
@@ -2030,6 +2048,13 @@ DASHBOARD_HTML = """
 
             document.getElementById('updated').textContent = m.updated_at || '--';
             document.getElementById('last-updated').textContent = m.updated_at ? ('Updated ' + m.updated_at) : '';
+
+            // Camera label reflects the resolution the device is really sending,
+            // so the page can never advertise a resolution the feed does not have.
+            const camLabel = document.getElementById('cam-label');
+            if (camLabel && m.frame_width && m.frame_height) {
+                camLabel.textContent = 'DRIVER CAM · ' + m.frame_width + '×' + m.frame_height;
+            }
         }
 
         /* ── Wi-Fi switch ── */
@@ -2455,11 +2480,21 @@ def main():
                     if alcohol["ratio"] is not None else "MQ-3: no reading yet")
 
         color = (0, 0, 255) if alert_active else (0, 255, 0)
-        cv2.putText(frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-        cv2.putText(frame, f"State: {driver_state}", (10, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-        cv2.putText(frame, loc_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-        cv2.putText(frame, alc_text, (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
+        # HUD text scales with the frame so it stays legible and never runs off
+        # the edge at any camera resolution, and is drawn over a dark outline so
+        # it stays readable on bright frames.
+        hud_scale = max(0.5, w / 640.0)
+        hud_x = int(round(10 * hud_scale))
+        hud_thick = max(1, int(round(2 * hud_scale)))
+        _put_hud_text(frame, status_text, (hud_x, int(round(30 * hud_scale))),
+                      0.6 * hud_scale, color, hud_thick)
+        _put_hud_text(frame, f"State: {driver_state}", (hud_x, int(round(62 * hud_scale))),
+                      0.6 * hud_scale, color, hud_thick)
+        _put_hud_text(frame, loc_text, (hud_x, int(round(94 * hud_scale))),
+                      0.5 * hud_scale, (255, 255, 0), max(1, int(round(1 * hud_scale))))
+        _put_hud_text(frame, alc_text, (hud_x, int(round(116 * hud_scale))),
+                      0.5 * hud_scale, (255, 255, 0), max(1, int(round(1 * hud_scale))))
 
         # --- LoRa (non-blocking) ---
         # Design decision: critical safety alerts (DROWSY/CRITICAL_FATIGUE/
