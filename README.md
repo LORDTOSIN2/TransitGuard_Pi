@@ -187,6 +187,50 @@ way to view the feed remotely instead.
 - `gps_reader.py` — standalone NEO-6M NMEA reader/parser
 - `mq3_reader.py` — standalone MQ-3 calibration and live reading
 - `lora_at_config.py` — AT-command configuration/testing for the ATK-LORA-01
+- `analyze_session.py` — reconciles a telemetry trace against Supabase (delivery
+  ratio, scheduled/attempted/accepted/failed/duplicate counts, RTT vs. end-to-end)
+- `chart_session.py` — renders the latency/stability charts (requires `matplotlib`)
+- `export_messages.py` — one-row-per-message CSV export, reconciled with the DB
+
+## Measuring connection stability
+
+The app can optionally record a per-event JSONL trace of its upload path, used
+to evaluate connection stability and delivery ratio:
+
+```bash
+# /etc/transitguard.env (or .env) — tracing is off when unset/empty
+TELEMETRY_TRACE_PATH=/home/john/fatigue/logs/telemetry_trace.jsonl
+```
+
+While set, each publish appends one JSON line per event:
+
+- `scheduled` — the main loop queued a payload (`trigger`: `interval` or `alert`)
+- `attempt` — an HTTP POST finished; carries `t_mono_start` / `t_mono_end`
+  (from `time.monotonic()`), `rtt_ms`, `http_status`, `error`, and the server's
+  `Date` header
+- `dropped` — the queue was full and evicted its oldest pending payload
+
+Tracing is fully disabled when the path is empty, so behaviour is unchanged in
+normal operation. After a measurement run, reconcile the trace against the
+authoritative rows in `public.telemetry`:
+
+```bash
+python tools/analyze_session.py --trace telemetry_trace.jsonl
+python tools/export_messages.py   # writes session_messages.csv
+python tools/chart_session.py     # writes session_charts.png
+```
+
+Two notes on interpreting the numbers:
+
+- **Duplicates return HTTP 201.** The ingest Edge Function upserts with
+  `onConflict: message_id, ignoreDuplicates: true`, so a re-sent `messageId`
+  looks accepted to the device but inserts no new row. Duplicate counts must
+  therefore be derived server-side, not from the device's status codes.
+- **HTTP RTT and end-to-end delay are different quantities.** RTT comes from
+  the Pi's `time.monotonic()` timer around the request; end-to-end is
+  `created_at -` device timestamp and is only meaningful when both clocks are
+  NTP-synchronised. Report RTT separately, and document clock sync before
+  quoting end-to-end figures.
 
 ## Known gaps vs. original project objectives
 
