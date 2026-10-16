@@ -236,6 +236,29 @@ WIFI_SWITCH_ENABLED = (
     and bool(WIFI_SWITCH_TARGET_SSID)
 )
 
+# --- Optional telemetry tracing (connection-stability evaluation) ----------
+# When TELEMETRY_TRACE_PATH is set, append one JSON object per line for every
+# scheduled / attempted / dropped telemetry event, including a monotonic-timer
+# round-trip and the HTTP status code. Empty path = fully disabled (default),
+# so there is no behaviour change unless you opt in for a measurement run.
+TELEMETRY_TRACE_PATH = os.environ.get("TELEMETRY_TRACE_PATH", "").strip()
+_trace_lock = threading.Lock()
+
+
+def trace_event(**fields):
+    """Append one JSON line to TELEMETRY_TRACE_PATH. No-op when tracing is off."""
+    if not TELEMETRY_TRACE_PATH:
+        return
+    fields.setdefault("wall_utc", time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()))
+    fields.setdefault("wall_epoch", round(time.time(), 3))
+    try:
+        line = json.dumps(fields, separators=(",", ":"))
+        with _trace_lock:
+            with open(TELEMETRY_TRACE_PATH, "a") as fh:
+                fh.write(line + "\n")
+    except Exception:
+        pass
+
 if not DEVICE_TOKEN:
     print("WARNING: TRANSITGUARD_DEVICE_TOKEN is not set. Every upload will "
           "fail with 401 Unauthorized until you set it (see the integration "
@@ -324,7 +347,7 @@ def flush_buffer(max_per_cycle=15):
     sent = 0
     for row_id, payload_json in rows:
         payload = json.loads(payload_json)
-        if _post_telemetry(payload):
+        if _post_telemetry(payload, source="flush"):
             conn.execute("DELETE FROM pending_packets WHERE id = ?", (row_id,))
             conn.commit()
             sent += 1
@@ -338,29 +361,54 @@ def flush_buffer(max_per_cycle=15):
 # ---------------------------
 # SUPABASE UPLOAD
 # ---------------------------
-def _post_telemetry(payload):
+def _post_telemetry(payload, source="live"):
     """Raw HTTPS POST to the ingest-telemetry Edge Function. Returns True
-    on HTTP 201, False on any failure (network, timeout, 4xx, 5xx)."""
+    on HTTP 201, False on any failure (network, timeout, 4xx, 5xx).
+
+    When tracing is enabled, records a monotonic-timer round-trip, the HTTP
+    status code (or transport error) and the server's Date header, so that
+    HTTP RTT and clock skew against Supabase can both be reported."""
     headers = {
         "Content-Type": "application/json",
         "x-device-token": DEVICE_TOKEN,
         "Authorization": f"Bearer {DEVICE_TOKEN}",
     }
+    t_start = time.monotonic()
+    status = None
+    server_date = None
+    error = None
     try:
         resp = requests.post(
             SUPABASE_INGEST_URL, json=payload, headers=headers, timeout=HTTP_TIMEOUT_SEC
         )
-        if resp.status_code == 201:
-            return True
-        else:
-            print(f"Supabase upload rejected: HTTP {resp.status_code} - {resp.text[:200]}")
-            return False
+        status = resp.status_code
+        server_date = resp.headers.get("Date")
+        ok = (status == 201)
+        if not ok:
+            print(f"Supabase upload rejected: HTTP {status} - {resp.text[:200]}")
     except requests.RequestException as e:
+        error = f"{type(e).__name__}: {e}"
+        ok = False
         print(f"Supabase upload failed (network): {e}")
-        return False
+    t_end = time.monotonic()
+
+    trace_event(
+        ev="attempt",
+        messageId=payload.get("messageId"),
+        device_ts_ms=payload.get("timestamp"),
+        source=source,
+        t_mono_start=round(t_start, 6),
+        t_mono_end=round(t_end, 6),
+        rtt_ms=round((t_end - t_start) * 1000.0, 3),
+        http_status=status,
+        server_date=server_date,
+        error=error,
+        ok=ok,
+    )
+    return ok
 
 
-def send_telemetry(payload):
+def send_telemetry(payload, source="live"):
     """
     Tries to flush any existing backlog first (so ordering stays mostly
     correct), then sends the current packet. On failure, the current
@@ -369,7 +417,7 @@ def send_telemetry(payload):
     if buffer_count() > 0:
         flush_buffer()
 
-    if _post_telemetry(payload):
+    if _post_telemetry(payload, source=source):
         _set_network_online(True)
         return True
     else:
@@ -1035,21 +1083,28 @@ def lora_sender_thread(lora_ser):
         lora_queue.task_done()
 
 
-def queue_put_latest(q, item):
+def queue_put_latest(q, item, trace_label=None):
     """Puts an item on a queue, dropping the oldest pending item first if
     the queue is full, so we always send the freshest data, not the
     stalest, when the network/radio has fallen behind."""
     try:
         q.put_nowait(item)
     except queue.Full:
+        dropped = None
         try:
-            q.get_nowait()
+            dropped = q.get_nowait()
         except queue.Empty:
             pass
         try:
             q.put_nowait(item)
         except queue.Full:
             pass
+        if trace_label:
+            trace_event(
+                ev="dropped",
+                label=trace_label,
+                messageId=(dropped or {}).get("messageId") if isinstance(dropped, dict) else None,
+            )
 
 
 # ---------------------------
@@ -2207,9 +2262,18 @@ def main():
                 avg_ear, mar, perclos, pitch, yaw, roll, location, alcohol, driver_state,
                 transport_mode=("WIFI" if is_network_online() else "LORA"),
             )
-            queue_put_latest(telemetry_queue, payload)
+            queue_put_latest(telemetry_queue, payload, trace_label="telemetry")
             last_supabase_send = time.time()
             sent = "queued"  # actual success/failure is logged by the uploader thread
+            trace_event(
+                ev="scheduled",
+                messageId=payload.get("messageId"),
+                device_ts_ms=payload.get("timestamp"),
+                trigger=("alert" if alert_active else "interval"),
+                driver_state=driver_state,
+                queue_size=telemetry_queue.qsize(),
+                transport_mode=("WIFI" if is_network_online() else "LORA"),
+            )
 
         # --- CSV logging (always, for evaluation data) ---
         if time.time() - last_log_time >= LOG_INTERVAL_SEC:
