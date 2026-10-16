@@ -1,0 +1,62 @@
+# Connection-stability measurements
+
+Raw evidence for the study of the **Pi → Supabase ingest → Postgres → dashboard** upload path.
+The narrative and the numbers are in [`stability_report.md`](stability_report.md); this file
+explains the artifacts and how to reproduce them.
+
+> **Three ~30-minute sessions** were run on 2026-10-16 on the `SFM MBB - CONF` hotspot.
+> Combined totals: 612 scheduled, 580 attempted, 578 stored unique, 34 dropped (all in one
+> alert burst in run 3), 99.66 % delivery vs attempted, HTTP RTT median 1.65 s / p95 3.79 s.
+> The study also found and fixed a 49 % alert-message loss defect (`46077a2`).
+
+## Naming
+
+The measurement tools (`tools/analyze_session.py`, `tools/export_messages.py`,
+`tools/chart_session.py`) **hardcode the canonical filenames** (`telemetry_trace.jsonl`,
+`session_messages.csv`, …). The canonical files are therefore **run 3**; runs 1 and 2 carry a
+`_run1` / `_run2` suffix. To analyse another run, copy it over the canonical name first.
+
+| File | Run | Contents |
+|---|---|---|
+| `telemetry_trace.jsonl` | **3** | raw JSONL trace — `scheduled` / `attempt` / `dropped` events with monotonic timestamps, RTT, HTTP status, server date |
+| `telemetry_trace_run1.jsonl` | 1 | raw trace |
+| `telemetry_trace_run2.jsonl` | 2 | raw trace |
+| `session_messages.csv` | **3** | one row per reconciled message |
+| `session_messages_run1.csv` | 1 | reconciled rows |
+| `session_messages_run2.csv` | 2 | reconciled rows |
+| `session_summary.json` | **3** | machine-readable summary (counts, RTT percentiles, delivery ratios) |
+| `session_summary_run1.json` | 1 | summary |
+| `session_summary_run2.json` | 2 | summary |
+| `session_charts.png` | **3** | latency + stability charts |
+| `session_charts_run1.png` | 1 | charts |
+| `session_charts_run2.png` | 2 | charts |
+| `stability_report.md` | all | the written report |
+
+## Reproducing a session
+
+```bash
+# 1. On the Pi, enable tracing (add to /etc/transitguard.env, then restart transitguard):
+TELEMETRY_TRACE_PATH=/home/john/fatigue/logs/telemetry_trace_runN.jsonl
+
+# 2. After the session, copy the trace down and reconcile it against Supabase:
+scp john@<pi>:/home/john/fatigue/logs/telemetry_trace_runN.jsonl telemetry_trace.jsonl
+python tools/analyze_session.py --trace telemetry_trace.jsonl      # merges server-side rows
+python tools/export_messages.py                                    # -> session_messages.csv
+python tools/chart_session.py                                      # -> session_charts.png
+
+# 3. IMPORTANT: remove TELEMETRY_TRACE_PATH and restart again.
+#    Tracing grows ~5.8 MB/day and the Pi's disk runs at ~91 % used.
+```
+
+## Caveats
+
+* Duplicates are undetectable from the HTTP status: the ingest function upserts with
+  `onConflict: message_id, ignoreDuplicates: true`, so a duplicate returns **HTTP 201** and
+  inserts nothing. Duplicate counts are derived server-side.
+* `HTTP_TIMEOUT_SEC` applies **per socket operation**, not per request, so multi-second
+  requests can still succeed.
+* HTTP round-trip (RTT) is authoritative; end-to-end delay additionally relies on NTP-synced
+  clocks (the Pi's clock is UTC+1 in the journal, Supabase is UTC).
+
+See [`../../CONTEXT.md`](../../CONTEXT.md) for the Pi layout, SSH access, hotspot switching and
+Supabase details.

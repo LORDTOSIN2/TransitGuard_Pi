@@ -209,6 +209,11 @@ still present and the schema accepts null `latitude`/`longitude`.
 | `chart_session.py` | chart renderer (needs `matplotlib`) |
 | `export_messages.py` | per-message CSV exporter |
 
+All of the above live in this directory (`docs/measurements/`) in the `TransitGuard_Pi`
+repo. The **un-suffixed names are run 3** — they are the canonical filenames that
+`analyze_session.py`, `export_messages.py` and `chart_session.py` hardcode, which is why
+the raw traces are stored under those names.
+
 ## 10. Reproduction
 
 ```bash

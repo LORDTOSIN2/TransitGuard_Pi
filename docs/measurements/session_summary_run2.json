@@ -1,0 +1,30 @@
+{
+  "window_start_utc": "2026-10-16T06:21:47.230000+00:00",
+  "window_end_utc": "2026-10-16T06:52:03.951000+00:00",
+  "duration_min": 30.28,
+  "scheduled": 192,
+  "dropped": 0,
+  "attempted": 192,
+  "attempted_unique": 192,
+  "accepted_http201": 192,
+  "stored_unique": 192,
+  "failed": 0,
+  "duplicate_attempts": 0,
+  "scheduled_never_attempted": 0,
+  "delivery_ratio_pct": 100.0,
+  "rtt_ms": {
+    "n": 192,
+    "min": 1382.2,
+    "mean": 1741.2,
+    "median": 1605.6,
+    "p95": 2325.7,
+    "max": 6446.2
+  },
+  "e2e_ms": {
+    "n": 192,
+    "mean": 1606.7,
+    "median": 1353.2,
+    "p95": 3117.8
+  },
+  "clock_skew_ms_mean": -101.0
+}
