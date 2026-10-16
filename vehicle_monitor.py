@@ -162,6 +162,23 @@ GPS_LAST_KNOWN_PATH = os.path.join(
 GPS_LAST_KNOWN_MIN_INTERVAL_SEC = 30.0   # periodic refresh while parked
 GPS_LAST_KNOWN_MIN_MOVE_M = 50.0         # …or once the vehicle moved this far
 
+# Some NEO-6M / clone boards ship with only RMC enabled. Without GGA the
+# satellite count and fix quality are unknowable, and without GSV there is no
+# satellites-in-view or SNR to diagnose a stubborn "no fix". At startup we ask
+# the module for them via UBX-CFG-MSG — a harmless no-op on modules that don't
+# speak UBX.
+GPS_ENABLE_SENTENCES = (
+    os.environ.get("GPS_ENABLE_SENTENCES", "true").strip().lower() in ("1", "true", "yes")
+)
+
+# Camera recovery: when a USB camera fails mid-stream, cap.read() keeps
+# returning False. Retrying that in a tight loop used to peg a core at 100%
+# CPU and silently stop all telemetry, so back off and then reopen the device.
+CAMERA_RETRY_BACKOFF_SEC = 0.25        # first retry delay, doubling up to…
+CAMERA_RETRY_BACKOFF_MAX_SEC = 2.0     # …this cap
+CAMERA_REOPEN_AFTER_FAILURES = 30      # consecutive failures before reopening
+CAMERA_REOPEN_DELAY_SEC = 1.0
+
 MQ3_RL_VALUE = 10.0
 MQ3_R0 = 6.78  # PLACEHOLDER — replace with your calibrated R0
 MQ3_VCC = 5.0
@@ -669,7 +686,10 @@ def build_telemetry_payload(ear, mar, perclos, pitch, yaw, roll, location, alcoh
             "lng": location.get("longitude"),
             "speed": _knots_to_kmh(location.get("speed_knots")),
             "heading": None,
-            "satelliteCount": None,
+            "satelliteCount": location.get("sats_used"),
+            "satellitesInView": location.get("sats_in_view"),
+            "bestSnr": location.get("best_snr"),
+            "fixQuality": location.get("fix_quality"),
             "hasFix": bool(location.get("fix_valid")),
         },
         "biometrics": {
@@ -827,16 +847,72 @@ latest_gps = {
     "last_known_latitude": _boot_lat,
     "last_known_longitude": _boot_lon,
     "last_known_time": _boot_ts,
+    # NMEA diagnostics. Populated only when the module emits GGA/GSV (see
+    # enable_required_nmea()); they stay None on RMC-only modules.
+    "sats_used": None,       # GGA: satellites used in the fix
+    "sats_in_view": None,    # GSV: satellites currently in view
+    "best_snr": None,        # GSV: best C/N0 seen in the current sweep
+    "fix_quality": None,     # GGA: 0 = none, 1 = GPS, 2 = DGPS
+    "hdop": None,
+    "altitude_m": None,
+    "gsv_at": None,          # wall time of the last GSV sentence
 }
 del _boot_lat, _boot_lon, _boot_ts  # clean up boot-time temporaries
 
 
-def gps_reader_thread():
+def _safe_float(value):
+    """float() that returns None instead of raising on blank NMEA fields."""
     try:
-        ser = serial.Serial(GPS_UART_PORT, GPS_BAUD_RATE, timeout=1)
-    except Exception as e:
-        print(f"GPS serial port could not be opened: {e}")
-        return
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _ubx_checksum(data):
+    """u-blox 8-bit Fletcher checksum (CK_A, CK_B)."""
+    ck_a = ck_b = 0
+    for byte in data:
+        ck_a = (ck_a + byte) & 0xFF
+        ck_b = (ck_b + ck_a) & 0xFF
+    return ck_a, ck_b
+
+
+def _ubx_cfg_msg(ser, msg_class, msg_id, rate):
+    """Send UBX-CFG-MSG to set a message's output rate on the current port."""
+    payload = bytes([msg_class, msg_id, rate])
+    frame = bytes([0xB5, 0x62, 0x06, 0x01, len(payload), 0x00]) + payload
+    ck_a, ck_b = _ubx_checksum(frame[2:])   # checksum covers class..payload
+    ser.write(frame + bytes([ck_a, ck_b]))
+    ser.flush()
+
+
+def enable_required_nmea(ser):
+    """Ask the module for the sentences this app reports on: GGA (satellites
+    used + fix quality), GSV (satellites in view + SNR), GSA, VTG and RMC.
+    Silently does nothing on modules that don't speak UBX."""
+    for name, (cls, mid) in (("GGA", (0xF0, 0x00)), ("GSA", (0xF0, 0x02)),
+                             ("GSV", (0xF0, 0x03)), ("RMC", (0xF0, 0x04)),
+                             ("VTG", (0xF0, 0x05))):
+        try:
+            _ubx_cfg_msg(ser, cls, mid, 1)
+        except Exception as e:
+            print(f"GPS: could not request {name} sentences: {e}")
+            return
+    print("GPS: requested GGA/GSA/GSV/RMC/VTG NMEA output")
+
+
+def gps_reader_thread():
+    ser = None
+    # A transient open failure must not kill GPS for the whole run.
+    while ser is None:
+        try:
+            ser = serial.Serial(GPS_UART_PORT, GPS_BAUD_RATE, timeout=1)
+        except Exception as e:
+            print(f"GPS serial port could not be opened: {e} — retrying in 5s")
+            time.sleep(5)
+
+    if GPS_ENABLE_SENTENCES:
+        enable_required_nmea(ser)
 
     while True:
         try:
@@ -868,6 +944,50 @@ def gps_reader_thread():
                 else:
                     latest_gps["fix_valid"] = False
                 latest_gps["last_update"] = time.time()
+
+        elif isinstance(msg, pynmea2.types.talker.GGA):
+            with gps_lock:
+                sats = None
+                try:
+                    sats = int(msg.num_sats) if msg.num_sats not in (None, "") else 0
+                except (TypeError, ValueError):
+                    sats = None
+                if sats is not None:
+                    latest_gps["sats_used"] = sats
+                try:
+                    quality = int(msg.gps_qual) if msg.gps_qual not in (None, "") else 0
+                except (TypeError, ValueError):
+                    quality = 0
+                latest_gps["fix_quality"] = quality
+                latest_gps["hdop"] = _safe_float(msg.horizontal_dil)
+                latest_gps["altitude_m"] = _safe_float(msg.altitude)
+                # A GGA with quality > 0 is a live fix even if the RMC status
+                # byte has not caught up yet this second.
+                if quality > 0 and msg.latitude and msg.longitude:
+                    latest_gps["latitude"] = msg.latitude
+                    latest_gps["longitude"] = msg.longitude
+                    latest_gps["fix_valid"] = True
+
+        elif isinstance(msg, pynmea2.types.talker.GSV):
+            with gps_lock:
+                try:
+                    latest_gps["sats_in_view"] = (
+                        int(msg.num_sv_in_view) if msg.num_sv_in_view not in (None, "") else 0
+                    )
+                except (TypeError, ValueError):
+                    pass
+                now = time.time()
+                # GSV spans several sentences per sweep: start a fresh best-SNR
+                # window when this sentence opens a new sweep.
+                if latest_gps["gsv_at"] is None or now - latest_gps["gsv_at"] > 2.0:
+                    latest_gps["best_snr"] = None
+                latest_gps["gsv_at"] = now
+                snrs = [_safe_float(getattr(msg, f"snr_{i}", None)) for i in range(1, 5)]
+                snrs = [s for s in snrs if s is not None]
+                if snrs:
+                    best = max(snrs)
+                    prev = latest_gps["best_snr"]
+                    latest_gps["best_snr"] = best if prev is None else max(prev, best)
 
 
 def get_current_location():
@@ -1019,17 +1139,43 @@ class ThreadedCamera:
     from the inference loop entirely.
     """
     def __init__(self, src=0, width=None, height=None):
-        self.cap = cv2.VideoCapture(src)
-        if width:
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        if height:
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.src = src
+        self.width = width
+        self.height = height
+        self.cap = self._open(src, width, height)
         self.lock = threading.Lock()
         self.frame = None
         self.ok = self.cap.isOpened()
         self.stopped = False
+        self.consecutive_failures = 0
         self.thread = threading.Thread(target=self._update, daemon=True)
         self.thread.start()
+
+    @staticmethod
+    def _open(src, width=None, height=None):
+        cap = cv2.VideoCapture(src)
+        if width:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        if height:
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        return cap
+
+    def _reopen(self):
+        """A UVC camera that failed mid-stream often recovers on reopen."""
+        try:
+            self.cap.release()
+        except Exception:
+            pass
+        time.sleep(CAMERA_REOPEN_DELAY_SEC)
+        try:
+            self.cap = self._open(self.src, self.width, self.height)
+            if self.cap.isOpened():
+                print("[CAMERA] reopened the capture device")
+                self.consecutive_failures = 0
+            else:
+                print("[CAMERA] reopen failed; will keep retrying")
+        except Exception as e:
+            print(f"[CAMERA] reopen error: {e}")
 
     def _update(self):
         while not self.stopped:
@@ -1038,8 +1184,23 @@ class ThreadedCamera:
                 with self.lock:
                     self.frame = frame
                     self.ok = True
-            else:
+                self.consecutive_failures = 0
+                continue
+
+            # Read failed: NEVER spin here. A tight retry loop used to peg a
+            # core at 100% CPU and silently stall the whole app (no telemetry,
+            # no GPS). Back off, then periodically try to reopen the device.
+            self.consecutive_failures += 1
+            with self.lock:
                 self.ok = False
+            if self.consecutive_failures == 1:
+                print("[CAMERA] frame read failed; backing off and retrying")
+            if self.consecutive_failures % CAMERA_REOPEN_AFTER_FAILURES == 0:
+                print(f"[CAMERA] {self.consecutive_failures} consecutive read failures "
+                      f"— attempting to reopen the device")
+                self._reopen()
+            time.sleep(min(CAMERA_RETRY_BACKOFF_SEC * self.consecutive_failures,
+                           CAMERA_RETRY_BACKOFF_MAX_SEC))
 
     def read(self):
         with self.lock:
@@ -1238,6 +1399,7 @@ latest_metrics = {
     "ear": None, "mar": None, "perclos": None, "pitch": None,
     "latitude": None, "longitude": None, "fix_valid": False,
     "using_last_known": False, "location_age_sec": None,
+    "sats_used": None, "sats_in_view": None, "best_snr": None, "fix_quality": None,
     "alcohol_ratio": None, "alcohol_ppm": None,
     "network_online": True, "buffer_count": 0,
     "buzzer_active": False, "lcd_message": None,
@@ -1659,6 +1821,10 @@ DASHBOARD_HTML = """
                     <span class="metric-value accent" id="gps">--</span>
                 </div>
                 <div class="metric-row">
+                    <span class="metric-label">Satellites</span>
+                    <span class="metric-value muted" id="sats">--</span>
+                </div>
+                <div class="metric-row">
                     <span class="metric-label">MQ-3 Ratio</span>
                     <span class="metric-value" id="alcohol">--</span>
                 </div>
@@ -1787,6 +1953,21 @@ DASHBOARD_HTML = """
                 gpsCls  = 'warn';
             }
             setVal('gps', gpsText, gpsCls);
+
+            // Satellites — GGA reports those used in the fix, GSV those in
+            // view; a module may emit only some of these sentences.
+            let satsText = '--';
+            let satsCls  = 'muted';
+            if (m.sats_used !== null || m.sats_in_view !== null) {
+                const used = m.sats_used   !== null ? m.sats_used   : '?';
+                const view = m.sats_in_view !== null ? m.sats_in_view : '?';
+                satsText = used + ' used / ' + view + ' in view'
+                         + (m.best_snr !== null ? ' | best ' + m.best_snr + ' dBHz' : '');
+                satsCls  = (m.sats_used && m.sats_used >= 4) ? 'accent' : 'warn';
+            } else {
+                satsText = 'not reported by module';
+            }
+            setVal('sats', satsText, satsCls);
 
             // Alcohol
             const alcVal = m.alcohol_ratio !== null ? m.alcohol_ratio.toFixed(2) : '--';
@@ -2291,6 +2472,10 @@ def main():
                 fix_valid=location["fix_valid"],
                 using_last_known=location.get("using_last_known", False),
                 location_age_sec=location.get("location_age_sec"),
+                sats_used=location.get("sats_used"),
+                sats_in_view=location.get("sats_in_view"),
+                best_snr=location.get("best_snr"),
+                fix_quality=location.get("fix_quality"),
                 alcohol_ratio=alcohol["ratio"], alcohol_ppm=alcohol["ppm"],
                 network_online=is_network_online(), buffer_count=buffer_count(),
                 buzzer_active=get_current_actuator()["buzzer_active"],
