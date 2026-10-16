@@ -218,6 +218,22 @@ SUPABASE_INGEST_URL = os.environ.get(
 DEVICE_ID = os.environ.get("TRANSITGUARD_DEVICE_ID", "BUS-101")
 DEVICE_TOKEN = os.environ.get("TRANSITGUARD_DEVICE_TOKEN", "")
 PUBLISH_INTERVAL_SEC = float(os.environ.get("PUBLISH_INTERVAL_SEC", "10.0"))
+
+# While a driver alert is active the main loop runs at ~20 FPS and historically
+# enqueued a telemetry message on EVERY iteration. The single uploader drains
+# about one message per 1.5 s, so a sustained alarm saturated the bounded queue
+# and drop-oldest silently discarded ~49% of alert messages (measured live in
+# run 3 — see stability_report.md). These two knobs bound the producer:
+#   * ALERT_PUBLISH_MIN_INTERVAL_SEC is the minimum gap between sends while an
+#     alert is active (or a state transition just occurred). Entering an alert
+#     still goes out promptly — after a quiet NORMAL period the elapsed gap is
+#     already >= this value — while rapid DROWSY<->CRITICAL flapping can no
+#     longer storm the queue.
+#   * TELEMETRY_QUEUE_MAXSIZE is a safety margin, not the primary control.
+ALERT_PUBLISH_MIN_INTERVAL_SEC = float(
+    os.environ.get("ALERT_PUBLISH_MIN_INTERVAL_SEC", "5.0")
+)
+TELEMETRY_QUEUE_MAXSIZE = int(os.environ.get("TELEMETRY_QUEUE_MAXSIZE", "50"))
 BUFFER_DB_PATH = os.environ.get(
     "BUFFER_DB_PATH", os.path.expanduser("~/.transitguard_buffer.db")
 )
@@ -1215,10 +1231,12 @@ class ThreadedCamera:
 
 
 # Queues decouple slow network/radio I/O from the camera/inference loop.
-# maxsize=1 with drop-if-full behavior: if the network is slow, we skip
-# stale telemetry rather than backing up an ever-growing queue in RAM
-# (the offline SQLite buffer already handles real persistence/retry).
-telemetry_queue = queue.Queue(maxsize=5)
+# Bounded with drop-oldest behaviour: if the network is slow we discard the
+# OLDEST telemetry rather than backing up an ever-growing queue in RAM (the
+# offline SQLite buffer already handles real persistence/retry). The cap is a
+# safety margin only — the alert path is rate-limited at the producer so a
+# sustained alarm should not reach it.
+telemetry_queue = queue.Queue(maxsize=TELEMETRY_QUEUE_MAXSIZE)
 lora_queue = queue.Queue(maxsize=5)
 
 
@@ -1402,6 +1420,7 @@ latest_metrics = {
     "sats_used": None, "sats_in_view": None, "best_snr": None, "fix_quality": None,
     "alcohol_ratio": None, "alcohol_ppm": None,
     "network_online": True, "buffer_count": 0,
+    "alert_coalesced": 0,
     "buzzer_active": False, "lcd_message": None,
     "updated_at": None,
 }
@@ -2284,6 +2303,8 @@ def main():
     lora_ser = setup_lora()
     last_lora_heartbeat = 0
     last_supabase_send = 0
+    last_published_state = None   # driver state of the last telemetry we queued
+    alert_coalesced = 0           # alert sends skipped by the rate limit (diagnostic)
 
     uploader_thread = threading.Thread(target=telemetry_uploader_thread, daemon=True)
     uploader_thread.start()
@@ -2435,16 +2456,29 @@ def main():
                                                             driver_state, location, alcohol))
             last_lora_heartbeat = time.time()
 
-        # --- Supabase: immediate on alert, otherwise every PUBLISH_INTERVAL_SEC (non-blocking) ---
+        # --- Supabase: publish on state change or at the configured cadence ---
+        # The gap required before the next send is the normal cadence, tightened
+        # while an alert is active or a transition has just occurred. This
+        # reports alert onset promptly (after a quiet NORMAL stretch the elapsed
+        # gap already exceeds the shorter floor) without letting the ~20 FPS
+        # loop enqueue far faster than the uploader drains — which previously
+        # caused drop-oldest to discard most alert messages (run 3).
         sent = None
-        should_send_now = alert_active or (time.time() - last_supabase_send >= PUBLISH_INTERVAL_SEC)
+        now_ts = time.time()
+        state_changed = driver_state != last_published_state
+        min_gap = (ALERT_PUBLISH_MIN_INTERVAL_SEC
+                   if (alert_active or state_changed) else PUBLISH_INTERVAL_SEC)
+        should_send_now = (now_ts - last_supabase_send) >= min_gap
+        if not should_send_now and alert_active:
+            alert_coalesced += 1
         if should_send_now:
             payload = build_telemetry_payload(
                 avg_ear, mar, perclos, pitch, yaw, roll, location, alcohol, driver_state,
                 transport_mode=("WIFI" if is_network_online() else "LORA"),
             )
             queue_put_latest(telemetry_queue, payload, trace_label="telemetry")
-            last_supabase_send = time.time()
+            last_supabase_send = now_ts
+            last_published_state = driver_state
             sent = "queued"  # actual success/failure is logged by the uploader thread
             trace_event(
                 ev="scheduled",
@@ -2454,6 +2488,8 @@ def main():
                 driver_state=driver_state,
                 queue_size=telemetry_queue.qsize(),
                 transport_mode=("WIFI" if is_network_online() else "LORA"),
+                state_changed=state_changed,
+                alert_coalesced=alert_coalesced,
             )
 
         # --- CSV logging (always, for evaluation data) ---
@@ -2478,6 +2514,7 @@ def main():
                 fix_quality=location.get("fix_quality"),
                 alcohol_ratio=alcohol["ratio"], alcohol_ppm=alcohol["ppm"],
                 network_online=is_network_online(), buffer_count=buffer_count(),
+                alert_coalesced=alert_coalesced,
                 buzzer_active=get_current_actuator()["buzzer_active"],
                 lcd_message=get_current_actuator()["lcd_message"],
             )
