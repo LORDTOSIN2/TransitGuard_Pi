@@ -39,10 +39,13 @@ connection-stability measurement documented in `docs/measurements/stability_repo
 Both are **public**. `TransitGuard_Pi` is the repo that is actually cloned onto the Pi.
 
 **On the Pi**, the same repo is checked out at `/home/john/fatigue` (same `origin`).
-As of writing: `TransitGuard_Pi` @ `46077a2`, `TransitGuard-IoT` @ `6fc8168`.
+As of writing: `TransitGuard_Pi` @ `01488b9`, `TransitGuard-IoT` @ `c83e772`.
 
-> Measurement artifacts (traces, CSVs, charts, `docs/measurements/stability_report.md`) currently live outside any
-> repo, in `C:\Users\Administrator\Documents\Default Project`.
+> **Committed measurement records** live in this repo under [`docs/measurements/`](docs/measurements/)
+> (the three-run connection-stability study plus the raw traces, CSVs and charts) and
+> [`docs/dashboard-test/`](docs/dashboard-test/) (the local + remote dashboard test, including
+> redacted screenshots and the DB evidence). The **unredacted** campaign files stay in
+> `C:\Users\Administrator\Documents\Default Project`.
 
 ---
 
