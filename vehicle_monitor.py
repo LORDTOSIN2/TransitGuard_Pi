@@ -81,6 +81,7 @@ import uuid
 import argparse
 import threading
 import queue
+import re
 import signal
 import subprocess
 import shlex
@@ -1430,10 +1431,98 @@ latest_metrics = {
     "alert_coalesced": 0,
     "buzzer_active": False, "lcd_message": None,
     "frame_width": None, "frame_height": None,
+    "pi_temperature": None, "pi_throttled": None, "pi_thermal_note": "",
     "updated_at": None,
 }
 
 dashboard_app = Flask(__name__)
+
+
+# ── Pi SoC temperature / throttling ─────────────────────────────────────────
+# thermal_zone0 reports millidegree Celsius and needs no helper binary, so the
+# reading works even where vcgencmd is unavailable. vcgencmd is only used for
+# the "sticky" throttling flags.
+_THERMAL_ZONE_PATH = "/sys/class/thermal/thermal_zone0/temp"
+_VCGENCMD = "/usr/bin/vcgencmd"
+
+_pi_thermal_cache = {"at": 0.0, "temp": None, "throttled": None, "note": ""}
+_PI_THERMAL_TTL = 1.0        # seconds; the dashboard polls about once a second
+
+# Colour levels in °C. The Pi's own soft temperature limit is 85 °C.
+PI_TEMP_COOL = 70.0
+PI_TEMP_WARM = 80.0
+PI_TEMP_HOT = 85.0
+
+# vcgencmd get_throttled bit meanings (BCM2835/2836 sticky flags).
+_THROTTLE_BITS = (
+    (0x1,     "under-voltage detected"),
+    (0x2,     "arm frequency capped"),
+    (0x4,     "currently throttled"),
+    (0x8,     "soft temperature limit active"),
+    (0x10000, "under-voltage has occurred"),
+    (0x20000, "arm frequency capping has occurred"),
+    (0x40000, "throttling has occurred"),
+    (0x80000, "soft temperature limit has occurred"),
+)
+
+
+def _read_thermal_zone():
+    """SoC temperature in °C from sysfs, or None if unavailable."""
+    try:
+        with open(_THERMAL_ZONE_PATH, "r", encoding="ascii") as fh:
+            return round(int(fh.read().strip()) / 1000.0, 1)
+    except (OSError, ValueError):
+        return None
+
+
+def _read_throttled_flags():
+    """Decode `vcgencmd get_throttled` into (raw, [active], [occurred])."""
+    try:
+        out = subprocess.run([_VCGENCMD, "get_throttled"], capture_output=True,
+                             text=True, timeout=3)
+        m = re.search(r"throttled=(0x[0-9a-fA-F]+)", out.stdout)
+        if not m:
+            return None, [], []
+        raw = int(m.group(1), 16)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None, [], []
+    active = [desc for bit, desc in _THROTTLE_BITS if raw & bit and bit < 0x10000]
+    occurred = [desc for bit, desc in _THROTTLE_BITS if raw & bit and bit >= 0x10000]
+    return raw, active, occurred
+
+
+def read_pi_thermal():
+    """Cached (temp °C, throttled hex string, human note). Cheap to poll."""
+    now = time.time()
+    if now - _pi_thermal_cache["at"] < _PI_THERMAL_TTL:
+        return (_pi_thermal_cache["temp"], _pi_thermal_cache["throttled"],
+                _pi_thermal_cache["note"])
+    temp = _read_thermal_zone()
+    raw, active, occurred = _read_throttled_flags()
+    if temp is None:
+        note = "thermal zone unavailable"
+    elif active:
+        note = "; ".join(active)
+    elif occurred:
+        note = "previously: " + "; ".join(occurred)
+    else:
+        note = ""
+    throttled = f"0x{raw:x}" if raw is not None else None
+    _pi_thermal_cache.update(at=now, temp=temp, throttled=throttled, note=note)
+    return temp, throttled, note
+
+
+def pi_temp_level(temp):
+    """'cool' | 'warm' | 'hot' | 'critical' | None — drives the dashboard colour."""
+    if temp is None:
+        return None
+    if temp >= PI_TEMP_HOT:
+        return "critical"
+    if temp >= PI_TEMP_WARM:
+        return "hot"
+    if temp >= PI_TEMP_COOL:
+        return "warm"
+    return "cool"
 
 
 def _put_hud_text(frame, text, org, scale, color, thickness):
@@ -1583,6 +1672,29 @@ DASHBOARD_HTML = """
         }
         .theme-toggle:hover { background: var(--accent-dim); border-color: var(--accent); }
         .toggle-icon { font-size: 15px; }
+
+        /* ── Pi temperature nav button ── */
+        .nav-temp {
+            background: var(--toggle-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 5px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .nav-temp:hover { background: var(--accent-dim); border-color: var(--accent); }
+        .nav-temp .tval { font-variant-numeric: tabular-nums; }
+        .nav-temp.cool     { color: #4ade80; }
+        .nav-temp.warm     { color: #fbbf24; }
+        .nav-temp.hot      { color: #fb923c; }
+        .nav-temp.critical { color: #f87171; }
 
         /* ── Wi-Fi switch card ── */
         .wifi-current {
@@ -1748,11 +1860,16 @@ DASHBOARD_HTML = """
         .metric-value.alert  { color: #f87171; }
         .metric-value.accent { color: var(--accent); }
         .metric-value.muted  { color: var(--text-muted); }
+        /* Pi SoC temperature levels — shared with /temperature */
+        .metric-value.cool     { color: #4ade80; }
+        .metric-value.warm     { color: #fbbf24; }
+        .metric-value.hot      { color: #fb923c; }
+        .metric-value.critical { color: #f87171; }
 
         /* ── Bottom strip: system status ── */
         .status-strip {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 10px;
             grid-column: 1 / 3;
         }
@@ -1782,6 +1899,10 @@ DASHBOARD_HTML = """
         .chip-value.off { color: var(--text-muted); }
         .chip-value.online { color: #4ade80; }
         .chip-value.offline { color: #fbbf24; }
+        .chip-value.cool     { color: #4ade80; }
+        .chip-value.warm     { color: #fbbf24; }
+        .chip-value.hot      { color: #fb923c; }
+        .chip-value.critical { color: #f87171; }
 
         /* ── Responsive fallback ── */
         @media (max-width: 768px) {
@@ -1809,6 +1930,10 @@ DASHBOARD_HTML = """
         </div>
         <div class="topbar-right">
             <span class="device-label" id="last-updated">--</span>
+            <a class="nav-temp" id="nav-temp" href="/temperature"
+               aria-label="Pi temperature — open the temperature view">
+                <span aria-hidden="true">🌡</span><span class="tval" id="nav-temp-val">--</span>
+            </a>
             <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn"
                     aria-label="Switch to light theme">
                 <span class="toggle-icon" id="toggle-icon" aria-hidden="true">☀</span>
@@ -1874,6 +1999,10 @@ DASHBOARD_HTML = """
                     <span class="metric-label">LCD Msg</span>
                     <span class="metric-value muted" id="lcd">--</span>
                 </div>
+                <div class="metric-row">
+                    <span class="metric-label">Pi Temp</span>
+                    <span class="metric-value" id="pi-temp">--</span>
+                </div>
             </div>
 
             <!-- Wi-Fi switch card (shown only when the feature is enabled) -->
@@ -1904,6 +2033,11 @@ DASHBOARD_HTML = """
             <div class="status-chip">
                 <span class="chip-label">Last Update</span>
                 <span class="chip-value accent" id="updated">--</span>
+            </div>
+            <div class="status-chip">
+                <span class="chip-label">Pi Temp</span>
+                <span class="chip-value" id="temp-chip" role="status"
+                      aria-label="Pi temperature unknown">--</span>
             </div>
         </div>
     </div>
@@ -2030,6 +2164,35 @@ DASHBOARD_HTML = """
             // LCD
             setVal('lcd', m.lcd_message || '--');
 
+            // Pi SoC temperature — same levels/colours as the /temperature view.
+            // Colour is never the only signal: the value text and the aria-labels
+            // carry the same information.
+            const piTemp = m.pi_temperature;
+            const piLevel = m.pi_temp_level || null;
+            const piTempText = (piTemp === null || piTemp === undefined)
+                ? '--' : piTemp.toFixed(1) + '°C';
+            const piTempCls = piLevel ? ' ' + piLevel : '';
+
+            const piTempEl = document.getElementById('pi-temp');
+            piTempEl.textContent = piTempText;
+            piTempEl.className = 'metric-value' + piTempCls;
+
+            const tempChip = document.getElementById('temp-chip');
+            tempChip.textContent = piTempText;
+            tempChip.className = 'chip-value' + piTempCls;
+            tempChip.setAttribute('aria-label', (piTemp === null || piTemp === undefined)
+                ? 'Pi temperature unavailable'
+                : 'Pi temperature ' + piTempText + (piLevel ? ', ' + piLevel : ''));
+
+            const navTemp = document.getElementById('nav-temp');
+            if (navTemp) {
+                navTemp.className = 'nav-temp' + piTempCls;
+                const navTempVal = document.getElementById('nav-temp-val');
+                if (navTempVal) navTempVal.textContent = piTempText;
+                navTemp.setAttribute('aria-label', 'Pi temperature ' + piTempText +
+                    ' — open the temperature view');
+            }
+
             // Status strip — colours are backed by text and by aria-labels,
             // so no state is carried by colour alone.
             const netEl = document.getElementById('network');
@@ -2124,6 +2287,177 @@ DASHBOARD_HTML = """
 
 
 
+TEMPERATURE_HTML = """
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <title>TransitGuard — Pi Temperature</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="30">
+    <style>
+        :root[data-theme="dark"] {
+            --bg:#111214; --panel:#1a1c1f; --border:#2e3035;
+            --text:#e8eaed; --muted:#7a7f8a; --accent:#4fc3f7;
+        }
+        :root[data-theme="light"] {
+            --bg:#e8eaed; --panel:#f5f6f8; --border:#d1d4da;
+            --text:#1a1c20; --muted:#6b7280; --accent:#0284c7;
+        }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body {
+            font-family:-apple-system,'Segoe UI',sans-serif;
+            background:var(--bg); color:var(--text);
+            min-height:100vh; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; padding:24px;
+        }
+        .back {
+            position:absolute; top:16px; left:20px;
+            color:var(--accent); text-decoration:none; font-size:13px; font-weight:600;
+        }
+        .back:hover { text-decoration:underline; }
+        .theme-toggle {
+            position:absolute; top:12px; right:20px;
+            background:var(--panel); border:1px solid var(--border); border-radius:20px;
+            padding:5px 14px; cursor:pointer; font-size:13px; color:var(--text);
+        }
+        .card {
+            background:var(--panel); border:1px solid var(--border);
+            border-radius:16px; padding:36px 44px; text-align:center;
+            max-width:520px; width:100%;
+        }
+        .label {
+            font-size:11px; font-weight:700; letter-spacing:2px;
+            text-transform:uppercase; color:var(--muted); margin-bottom:14px;
+        }
+        .temp {
+            font-size:88px; font-weight:800; line-height:1;
+            font-variant-numeric:tabular-nums; letter-spacing:-2px;
+        }
+        .temp.cool     { color:#4ade80; }
+        .temp.warm     { color:#fbbf24; }
+        .temp.hot      { color:#fb923c; }
+        .temp.critical { color:#f87171; }
+        .level {
+            display:inline-block; margin-top:14px; padding:6px 16px;
+            border-radius:20px; font-size:13px; font-weight:800; letter-spacing:1.5px;
+            border:1px solid var(--border);
+        }
+        .level.cool     { color:#4ade80; background:rgba(74,222,128,.12); }
+        .level.warm     { color:#fbbf24; background:rgba(251,191,36,.12); }
+        .level.hot      { color:#fb923c; background:rgba(251,146,60,.12); }
+        .level.critical { color:#f87171; background:rgba(248,113,113,.14); }
+        .note { margin-top:16px; font-size:12px; color:var(--muted); min-height:16px; }
+        .legend {
+            display:flex; flex-wrap:wrap; gap:8px 18px; justify-content:center;
+            margin-top:22px; padding-top:18px; border-top:1px solid var(--border);
+            font-size:11px; color:var(--muted);
+        }
+        .legend span { display:flex; align-items:center; gap:6px; }
+        .dot { width:9px; height:9px; border-radius:50%; display:inline-block; }
+        .dot.cool { background:#4ade80; } .dot.warm { background:#fbbf24; }
+        .dot.hot { background:#fb923c; } .dot.critical { background:#f87171; }
+        .meta {
+            display:flex; justify-content:space-between; gap:12px;
+            margin-top:18px; font-size:11px; color:var(--muted);
+            font-variant-numeric:tabular-nums;
+        }
+        .hot-banner {
+            display:none; margin-bottom:16px; padding:10px 14px; border-radius:10px;
+            background:rgba(248,113,113,.15); border:1px solid rgba(248,113,113,.4);
+            color:#f87171; font-size:13px; font-weight:700;
+        }
+        .hot-banner.show { display:block; }
+        @media (max-width:520px){ .temp{font-size:64px;} .card{padding:28px 22px;} }
+    </style>
+</head>
+<body>
+    <a class="back" href="/">&larr; Back to dashboard</a>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn"
+            aria-label="Switch to light theme">Light</button>
+
+    <div class="card">
+        <div class="hot-banner" id="hot-banner">Pi is HOT &mdash; check ventilation / load</div>
+        <div class="label">Raspberry Pi SoC Temperature</div>
+        <div class="temp" id="temp">--</div>
+        <div><span class="level" id="level">--</span></div>
+        <div class="note" id="note">--</div>
+        <div class="legend">
+            <span><i class="dot cool"></i>&lt; 70 &deg;C &middot; cool</span>
+            <span><i class="dot warm"></i>70&ndash;80 &deg;C &middot; warm</span>
+            <span><i class="dot hot"></i>80&ndash;85 &deg;C &middot; hot</span>
+            <span><i class="dot critical"></i>&ge; 85 &deg;C &middot; critical</span>
+        </div>
+        <div class="meta">
+            <span id="throttled">throttled --</span>
+            <span id="updated">updated --</span>
+        </div>
+    </div>
+
+    <script>
+        const LEVELS = {
+            cool:     ['COOL',     '#4ade80'],
+            warm:     ['WARM',     '#fbbf24'],
+            hot:      ['HOT',      '#fb923c'],
+            critical: ['CRITICAL', '#f87171'],
+        };
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            const btn = document.getElementById('theme-btn');
+            btn.textContent = theme === 'dark' ? 'Light' : 'Dark';
+            btn.setAttribute('aria-label', theme === 'dark'
+                ? 'Switch to light theme' : 'Switch to dark theme');
+            try { localStorage.setItem('tg_theme', theme); } catch(e) {}
+        }
+        function toggleTheme() {
+            applyTheme(document.documentElement.getAttribute('data-theme') === 'dark'
+                ? 'light' : 'dark');
+        }
+        try {
+            const saved = localStorage.getItem('tg_theme');
+            if (saved === 'light' || saved === 'dark') applyTheme(saved);
+        } catch(e) {}
+
+        async function tick() {
+            let d;
+            try {
+                const r = await fetch('/temperature/data');
+                d = await r.json();
+            } catch (e) { return; }
+
+            const t = document.getElementById('temp');
+            const lv = document.getElementById('level');
+            if (d.temperature === null) {
+                t.textContent = '--';
+                t.className = 'temp';
+                lv.textContent = 'unavailable';
+                lv.className = 'level';
+            } else {
+                t.textContent = d.temperature.toFixed(1) + ' °C';
+                const [label, color] = LEVELS[d.level] || ['--', '#7a7f8a'];
+                t.className = 'temp ' + (d.level || '');
+                t.style.color = color;
+                lv.textContent = label;
+                lv.className = 'level ' + (d.level || '');
+                lv.style.color = color;
+            }
+            document.getElementById('note').textContent
+                = d.note || 'no active throttling flags';
+            document.getElementById('throttled').textContent
+                = d.throttled ? ('throttled ' + d.throttled) : 'throttled n/a';
+            document.getElementById('updated').textContent
+                = 'updated ' + (d.updated_at || '--');
+            document.getElementById('hot-banner').className
+                = 'hot-banner' + (d.level === 'hot' || d.level === 'critical' ? ' show' : '');
+        }
+
+        setInterval(tick, 2000);
+        tick();
+    </script>
+</body>
+</html>
+"""
+
+
 @dashboard_app.route("/")
 def dashboard_index():
     return render_template_string(DASHBOARD_HTML)
@@ -2142,7 +2476,33 @@ def dashboard_data():
     # from the app's own alert rule.
     payload["alcohol_alert_threshold"] = MQ3_ALERT_RATIO_THRESHOLD
     payload["alcohol_caution_threshold"] = MQ3_CAUTION_RATIO_THRESHOLD
+    # SoC temperature / throttling, read fresh (sysfs, cached 1 s).
+    temp, throttled, note = read_pi_thermal()
+    payload["pi_temperature"] = temp
+    payload["pi_throttled"] = throttled
+    payload["pi_thermal_note"] = note
+    payload["pi_temp_level"] = pi_temp_level(temp)
     return jsonify(payload)
+
+
+@dashboard_app.route("/temperature")
+@dashboard_app.route("/temp")
+def dashboard_temperature():
+    """Dedicated at-a-glance Pi temperature page."""
+    return render_template_string(TEMPERATURE_HTML)
+
+
+@dashboard_app.route("/temperature/data")
+def dashboard_temperature_data():
+    """JSON feed for the temperature page (polled every 2 s)."""
+    temp, throttled, note = read_pi_thermal()
+    return jsonify({
+        "temperature": temp,
+        "level": pi_temp_level(temp),
+        "throttled": throttled,
+        "note": note,
+        "updated_at": time.strftime("%H:%M:%S"),
+    })
 
 
 @dashboard_app.route("/wifi/status")
