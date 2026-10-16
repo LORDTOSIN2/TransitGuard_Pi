@@ -6,7 +6,7 @@ heartbeat, JSON↔page mismatches, retained redacted screenshots + database evid
 browser/device/refresh/stale-field notes.
 
 **Date:** 2026-10-16, ~09:04–09:08 UTC (10:04–10:08 WAT)
-**Result:** both dashboards functional; **four defects** found (2 local-UI, 2 remote/data-fidelity). **F1 is now fixed** and deployed (commit `01488b9`); **F3–F5 remain open**.
+**Result:** both dashboards functional; **four defects** found (2 local-UI, 2 remote/data-fidelity). **F1, F2 and F7 are fixed** (`01488b9`, `236469a`) and the alcohol thresholds were retuned (`236469a`); **F3–F5 remain open**.
 
 ---
 
@@ -89,16 +89,16 @@ Collected ~2 s apart; summary:
 | # | Severity | Finding |
 |---|---|---|
 | **M1** | **Fixed** (`01488b9`) | **MQ-3 Ratio colour was inverted.** `/data` reports `alcohol_ratio` 5.27; the page rendered it with the **`alert` (red)** class. The JS test was `m.alcohol_ratio > 0.4` (line 537), but the app's actual rule is `ratio < 0.4` → `ALCOHOL_ALERT` (`MQ3_ALERT_RATIO_THRESHOLD`, line 516; *low* = alcohol). A **safe** reading was shown in alarm red and a real alert would have shown neutral. **Fixed:** compare with `<`, add a `MQ3_CAUTION_RATIO_THRESHOLD` (1.5) amber band, expose both thresholds in `/data`, and always reset the class. |
-| **M2** | Bug (cosmetic) | The camera panel is labelled **"DRIVER CAM · FHD"**, but the stream is **640×480** (`img.naturalWidth/Height`). |
+| **M2** | **Fixed** (`236469a`) | The camera panel was labelled **"DRIVER CAM · FHD"** while the stream is **640×480**. The label is now rendered from the true frame size published in `/data` (`frame_width`/`frame_height`), so it reads **`DRIVER CAM · 640×480`** and cannot lie. |
 | **M3** | Stale display | The GPS row shows `9.53714, 6.45449 (stale 2h 50m)` rather than "no fix yet". A fix was persisted at **07:15:36 WAT** (`.gps_last_known.json`), so the page faithfully renders a **2 h 50 m old** position — prominently, in amber. |
-| **M4** | Bug (cosmetic) | The Python-drawn HUD **on the video frame** is clipped/misaligned: text runs off the left edge and columns collide (see the raw screenshots). Distinct from the HTML page, which is fine. |
+| **M4** | **Fixed** (`236469a`) | The HUD **on the video frame** was clipped: the panel is wider than 4:3, so `object-fit: cover` cropped the top off the frame and cut the burned-in overlay. Now `object-fit: contain` (full frame, black letterbox blends into the panel) and the HUD scales with the frame and is drawn over a dark outline for readability. |
 | — | OK | `ear`/`mar`/`perclos`/`pitch` are `null` in JSON and render `--` (consistent). |
 | — | OK | `/data` carries no SSID/RSSI; the Network card sources it from `/wifi/status` (5 s cadence), so it updates independently of the 1 s metrics. |
 | — | Note | JSON fields **not** shown on the page: `alcohol_ppm`, `alert_coalesced`, `fix_quality`, and `using_last_known` (only implied by the "stale" text). |
 
 ### 2.5 Local screenshots
 
-* [`local_redacted.png`](local_redacted.png) — **retained redacted** capture: camera feed masked, GPS coordinates masked, SSID/IP masked.
+* [`local_redacted.png`](local_redacted.png) — **retained redacted** capture (pre-fix build — note the old "FHD" label): camera feed masked, GPS coordinates masked, SSID/IP masked.
 * The unredacted originals (`local_viewport_raw.png`, `local_fullpage_raw.png`) are **not committed** — they contain the SSID/IP and stay in the local workspace.
 
 ---
@@ -174,18 +174,38 @@ This corroborates the remote dashboard's `SUPABASE LIVE (N pkts)` and the local
 | ID | Where | Finding | Recommendation |
 |---|---|---|---|
 | **F1** | Local | MQ-3 ratio colour inverted (`> 0.4` vs the app's `< 0.4`) | **Fixed in `01488b9`** — compare with `<`, added a 1.5 amber caution band, thresholds now come from `/data`, class reset on every refresh. |
-| **F2** | Local | "FHD" label vs 640×480 stream | Correct the label or the capture resolution. |
+| **F2** | Local | "FHD" label vs 640×480 stream | **Fixed in `236469a`** — label rendered from the frame size reported in `/data`. |
 | **F3** | Remote | Simulator presented as live; real `null`s inherit fabricated values | Show an explicit "no face / simulated" state, or stop the sim once live telemetry connects. |
 | **F4** | Remote | "SUPABASE LIVE (N pkts)" = fetch limit + increments | Separate "hydrated rows" from "live inserts"; label the limit. |
 | **F5** | Remote | Hashed-asset 404 on mid-deploy reload → blank app | Keep previous hashed assets briefly, or have the SW serve a cached shell and refresh. |
 | **F6** | Local | 2 h 50 m stale last-known position shown prominently | Already flagged "stale"; consider suppressing > N minutes or showing "no current fix". |
-| **F7** | Local | On-frame HUD overlay clipped | Fix overlay positioning/scaling in the video annotation. |
+| **F7** | Local | On-frame HUD overlay clipped | **Fixed in `236469a`** — `object-fit: contain` (no crop) plus a frame-scaled, outlined HUD. |
 | **F8** | Local | `/data` jitter up to 187 ms; cold `/` 12.4 s | Watch for a blocking path; not reproducible (threaded server). |
-| **F9** | Local / app | **The alert threshold may be unreachable.** Field observation: alcohol near the MQ-3 drives the ratio from ~5.x down to only **~0.88**, but `MQ3_ALERT_RATIO_THRESHOLD` is **0.4** — so `ALCOHOL_ALERT` would not fire in practice. The new amber caution band (1.5) makes such a response *visible*, but does not fix the alert logic. | Calibrate (clean air vs known alcohol), then align `MQ3_ALERT_RATIO_THRESHOLD`, `MQ3_CAUTION_RATIO_THRESHOLD` and the `R0` value. **Decide the threshold with the operator before changing it** (safety-relevant). |
+| **F9** | Local / app | **The alert threshold was unreachable.** Alcohol near the MQ-3 drives the ratio to ~0.88, so the old `MQ3_ALERT_RATIO_THRESHOLD = 0.4` could never fire. | **Retuned in `236469a` on the operator's instruction:** alert `< 2.5`, amber caution `2.6–4`, clean `≥ 4` (`MQ3_ALERT_RATIO_THRESHOLD = 2.5`, `MQ3_CAUTION_RATIO_THRESHOLD = 4.0`). This changes `ALCOHOL_ALERT`, the buzzer and the LoRa alert too. A clean-vs-alcohol calibration sweep is still recommended to confirm the numbers. |
 
 **Verdict:** local dashboard is reachable, threaded, and its heartbeat is sound; the remote
-dashboard hydrates and streams correctly when its bundle loads. **F1 is fixed** (the safe
-reading is no longer shown as an alarm, and a real alcohol response now shows amber). The
-remaining high-value issues are **F3** (fabricated biometrics shown as live on the remote
-dashboard) and **F9** (the alcohol *alert* threshold is likely never reached and needs a
-calibration decision).
+dashboard hydrates and streams correctly when its bundle loads. **F1, F2, F7 and F9 are
+fixed** (MQ-3 colour correct and thresholds retuned; camera label truthful; on-frame HUD no
+longer cropped). The remaining high-value issue is **F3** (fabricated biometrics shown as
+live on the remote dashboard); **F5** is a transient deploy-skew 404.
+
+---
+
+## 6. Fixes applied (follow-up)
+
+| Defect | Commit | What changed |
+|---|---|---|
+| F1 | `01488b9` | MQ-3 colour compared with `>` instead of `<`; safe readings showed red and real alerts showed neutral. Now correct, threshold-driven from `/data`, class reset each refresh (was sticky). |
+| F9 | `236469a` | `MQ3_ALERT_RATIO_THRESHOLD` 0.4 → **2.5**, `MQ3_CAUTION_RATIO_THRESHOLD` 1.5 → **4.0** (alert `< 2.5`, amber `2.6–4`, clean `≥ 4`). |
+| F2 | `236469a` | Hardcoded "FHD" label replaced by the real frame size (`/data` `frame_width`/`frame_height`). |
+| F7 | `236469a` | `object-fit: contain` (no crop) + frame-scaled, dark-outlined HUD text. |
+
+Verified live after deploy (`236469a`): `/data` → `frame_width 640, frame_height 480`,
+`alcohol_alert_threshold 2.5`, `alcohol_caution_threshold 4.0`; the page label reads
+**`DRIVER CAM · 640×480`**; the MQ-3 ratio (~5.5) renders neutral; the burned-in HUD
+(`No face detected`, `State: NORMAL`, GPS, `MQ-3 ratio`) is fully inside the frame.
+
+> Capture note: the browser-screenshot harness rendered later captures in a light palette
+> even though the page's computed theme is dark (`body` background `rgb(17,18,20)`,
+> `--text-primary #e8eaed`, `.cam-panel` `rgb(0,0,0)`). The fixes above were therefore
+> verified from `/data`, the DOM and computed styles rather than from a new screenshot.
