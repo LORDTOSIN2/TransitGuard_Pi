@@ -201,6 +201,8 @@ way to view the feed remotely instead.
   ratio, scheduled/attempted/accepted/failed/duplicate counts, RTT vs. end-to-end)
 - `chart_session.py` — renders the latency/stability charts (requires `matplotlib`)
 - `export_messages.py` — one-row-per-message CSV export, reconciled with the DB
+- `measure_fps.py` — client-side frame rate of `/video_feed` (frames/s, JPEG dimensions, inter-frame gaps)
+- `wifi_latency_test.py` — ICMP / TCP / HTTP latency and PDR sweeps, idle vs. under video load; writes `wifi_latency_results.csv` to the working directory (lab hosts are constants at the top of the file)
 
 ## Measuring connection stability
 
