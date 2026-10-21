@@ -300,6 +300,57 @@ def trace_event(**fields):
     except Exception:
         pass
 
+# --- Test-only scripted driver-state input (evaluation harness) ------------
+# Exists so an upload-path measurement can exercise alert / rapid-transition
+# load WITHOUT performing fatigue actions in front of a real driver. When
+# ENABLE_TEST_STATE_INPUT is true and TEST_STATE_INPUT_PATH names a file, the
+# main loop overrides the classified state with the file's contents.
+#
+#   echo CRITICAL_FATIGUE > /home/john/fatigue/logs/test_state.txt
+#
+# Allowed values: NORMAL, DROWSY, CRITICAL_FATIGUE, ALCOHOL_ALERT. An empty or
+# unrecognised file leaves normal detection untouched. Every packet produced
+# while an override is active carries `testInjection`, so injected data can
+# never be mistaken for a measured detection. Off by default — remove the two
+# variables from the environment after the run.
+ENABLE_TEST_STATE_INPUT = (
+    os.environ.get("ENABLE_TEST_STATE_INPUT", "").strip().lower() in ("1", "true", "yes")
+)
+TEST_STATE_INPUT_PATH = os.environ.get("TEST_STATE_INPUT_PATH", "").strip()
+TEST_STATE_CHOICES = ("NORMAL", "DROWSY", "CRITICAL_FATIGUE", "ALCOHOL_ALERT")
+_test_state_cache = {"mtime": None, "value": None}
+
+if ENABLE_TEST_STATE_INPUT and not TEST_STATE_INPUT_PATH:
+    print("WARNING: ENABLE_TEST_STATE_INPUT is set but TEST_STATE_INPUT_PATH "
+          "is empty; scripted state input stays disabled.")
+
+
+def read_test_state():
+    """Return the scripted driver state, or None when not configured.
+
+    Re-reads only when the file's mtime changes, so calling this once per
+    camera frame (~20 FPS) costs a stat() at most."""
+    if not (ENABLE_TEST_STATE_INPUT and TEST_STATE_INPUT_PATH):
+        return None
+    try:
+        mtime = os.path.getmtime(TEST_STATE_INPUT_PATH)
+    except OSError:
+        _test_state_cache["mtime"] = None
+        _test_state_cache["value"] = None
+        return None
+    if mtime != _test_state_cache["mtime"]:
+        try:
+            with open(TEST_STATE_INPUT_PATH, "r", encoding="utf-8") as fh:
+                value = fh.read().strip().upper()
+        except OSError:
+            value = ""
+        _test_state_cache["mtime"] = mtime
+        _test_state_cache["value"] = value if value in TEST_STATE_CHOICES else None
+        if _test_state_cache["value"] is None:
+            print(f"Test state input: ignoring unrecognised value {value!r}")
+    return _test_state_cache["value"]
+
+
 if not DEVICE_TOKEN:
     print("WARNING: TRANSITGUARD_DEVICE_TOKEN is not set. Every upload will "
           "fail with 401 Unauthorized until you set it (see the integration "
@@ -685,9 +736,12 @@ def schedule_wifi_switch(profile_name, delay=2.0):
 
 
 def build_telemetry_payload(ear, mar, perclos, pitch, yaw, roll, location, alcohol,
-                             driver_state, transport_mode="WIFI"):
+                             driver_state, transport_mode="WIFI", test_state=None):
     """Builds the full canonical JSON payload matching Section 6.2 of the
-    integration guide, field-for-field."""
+    integration guide, field-for-field.
+
+    `test_state` is only ever set by the gated scripted-state input; when it is
+    not None the payload carries an explicit testInjection marker."""
     wifi_ssid, wifi_rssi = get_wifi_info() if transport_mode == "WIFI" else (None, None)
 
     # Approximate a 10-bit ADC-equivalent reading for schema compatibility,
@@ -747,6 +801,15 @@ def build_telemetry_payload(ear, mar, perclos, pitch, yaw, roll, location, alcoh
             "bufferedQueueCount": buffer_count(),
         },
     }
+    if test_state is not None:
+        # Provenance marker for scripted evaluation input. Presence of this
+        # object means driverState was overridden, not measured.
+        payload["testInjection"] = {
+            "enabled": True,
+            "source": "test-state-input",
+            "state": test_state,
+            "note": "Scripted evaluation input; not a measured detection.",
+        }
     return payload
 
 
@@ -2822,6 +2885,11 @@ def main():
         driver_state = classify_driver_state(
             avg_ear, eye_closed_frames, perclos, pitch, alcohol["ratio"]
         )
+        # Test-only scripted override (see read_test_state). None unless the
+        # evaluation harness explicitly enabled it.
+        test_state = read_test_state()
+        if test_state:
+            driver_state = test_state
         alert_active = driver_state != "NORMAL"
 
         if driver_state != last_actuator_state:
@@ -2891,6 +2959,7 @@ def main():
             payload = build_telemetry_payload(
                 avg_ear, mar, perclos, pitch, yaw, roll, location, alcohol, driver_state,
                 transport_mode=("WIFI" if is_network_online() else "LORA"),
+                test_state=test_state,
             )
             queue_put_latest(telemetry_queue, payload, trace_label="telemetry")
             last_supabase_send = now_ts
@@ -2906,6 +2975,7 @@ def main():
                 transport_mode=("WIFI" if is_network_online() else "LORA"),
                 state_changed=state_changed,
                 alert_coalesced=alert_coalesced,
+                test_injected_state=test_state,
             )
 
         # --- CSV logging (always, for evaluation data) ---
@@ -2930,9 +3000,11 @@ def main():
                 fix_quality=location.get("fix_quality"),
                 alcohol_ratio=alcohol["ratio"], alcohol_ppm=alcohol["ppm"],
                 network_online=is_network_online(), buffer_count=buffer_count(),
+                telemetry_queue_size=telemetry_queue.qsize(),
                 alert_coalesced=alert_coalesced,
                 buzzer_active=get_current_actuator()["buzzer_active"],
                 lcd_message=get_current_actuator()["lcd_message"],
+                test_injected_state=test_state,
             )
 
         if ENABLE_PREVIEW:
