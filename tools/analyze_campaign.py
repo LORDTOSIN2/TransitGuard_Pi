@@ -170,9 +170,6 @@ def is_true(value):
 def analyze_run(run_dir):
     trace_path = os.path.join(run_dir, "telemetry_trace.jsonl")
     events = load_trace(trace_path)
-    sched = [e for e in events if e.get("ev") == "scheduled"]
-    att = [e for e in events if e.get("ev") == "attempt"]
-    drops = [e for e in events if e.get("ev") == "dropped"]
     samples = load_csv(os.path.join(run_dir, "samples.csv"))
     flaps = load_csv(os.path.join(run_dir, "flaps.csv"))
     try:
@@ -189,8 +186,22 @@ def analyze_run(run_dir):
     if not events:
         raise SystemExit(f"{run_dir}: no trace events (tracing was not enabled?)")
 
+    # The harness records the intended session window. Trust it over the trace
+    # file bounds: a late restart would otherwise count post-session messages.
+    win = harness_summary.get("window") or {}
+    w_start, w_end = win.get("start_epoch"), win.get("end_epoch")
+    if w_start and w_end:
+        events = [e for e in events
+                  if w_start <= (e.get("wall_epoch") or 0) <= w_end]
+        if not events:
+            raise SystemExit(f"{run_dir}: no trace events inside the recorded window")
+
+    sched = [e for e in events if e.get("ev") == "scheduled"]
+    att = [e for e in events if e.get("ev") == "attempt"]
+    drops = [e for e in events if e.get("ev") == "dropped"]
+
     wall = [e["wall_epoch"] for e in events if "wall_epoch" in e]
-    t_start, t_end = min(wall), max(wall)
+    t_start, t_end = (w_start, w_end) if (w_start and w_end) else (min(wall), max(wall))
     start_iso = dt.datetime.fromtimestamp(t_start - 120, dt.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%S+00:00")
     end_iso = dt.datetime.fromtimestamp(t_end + 120, dt.timezone.utc).strftime(
@@ -281,6 +292,7 @@ def analyze_run(run_dir):
         "window_end_utc": dt.datetime.fromtimestamp(
             t_end, dt.timezone.utc).isoformat(),
         "duration_min": round((t_end - t_start) / 60.0, 2),
+        "window_source": win.get("source", "trace-bounds" if not w_start else "harness"),
         "hotspot": (manifest.get("network_at_start") or {}).get("ssid"),
         "rssi_dbm": (manifest.get("network_at_start") or {}).get("rssi_dbm"),
         "aborted": harness_summary.get("aborted"),

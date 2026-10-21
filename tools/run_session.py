@@ -337,7 +337,26 @@ def install_dropin(trace_path):
 def remove_dropin():
     sudo(["rm", "-f", DROPIN])
     sudo(["systemctl", "daemon-reload"])
+    # A drop-in removed without a restart leaves the RUNNING process with the
+    # old environment: tracing keeps appending to the run folder and the
+    # scripted-state input stays enabled. Always restart and wait for a fresh
+    # heartbeat so the next session starts from a clean process.
+    sudo(["systemctl", "restart", "transitguard"], check=True, timeout=90)
     sudo(["systemctl", "reset-failed", "transitguard"])
+
+
+def process_env_has(needle):
+    """True/False if the running service process has `needle` in its environ,
+    None if it cannot be read."""
+    rc, pid, _ = sh(["systemctl", "show", "transitguard", "-p", "MainPID", "--value"])
+    pid = (pid or "").strip()
+    if not pid or pid == "0":
+        return None
+    try:
+        with open(f"/proc/{pid}/environ", "rb") as fh:
+            return needle.encode() in fh.read()
+    except OSError:
+        return None
 
 
 def service_env_has(needle):
@@ -374,7 +393,7 @@ def restart_and_wait(trace_path, label):
 # --------------------------------------------------------------------------
 # session
 # --------------------------------------------------------------------------
-def trace_stats(trace_path):
+def trace_stats(trace_path, start_epoch=None, end_epoch=None):
     events = []
     if os.path.exists(trace_path):
         with open(trace_path, "r", encoding="utf-8", errors="replace") as fh:
@@ -385,6 +404,11 @@ def trace_stats(trace_path):
                         events.append(json.loads(line))
                     except json.JSONDecodeError:
                         pass
+    # The measurement window is the session, not the file: a process that is
+    # restarted late must not smuggle post-session events into the counts.
+    if start_epoch is not None and end_epoch is not None:
+        events = [e for e in events
+                  if start_epoch <= (e.get("wall_epoch") or 0) <= end_epoch]
     sched = [e for e in events if e.get("ev") == "scheduled"]
     att = [e for e in events if e.get("ev") == "attempt"]
     drops = [e for e in events if e.get("ev") == "dropped"]
@@ -615,6 +639,7 @@ def main():
     duration_s = args.minutes * 60.0
     flap_start_s = args.flap_start_min * 60.0
     flap_len_s = args.flap_minutes * 60.0
+    window_end_epoch = session_started + duration_s
     phase = "baseline"
     flap_rows = []
     aborted = False
@@ -705,6 +730,7 @@ def main():
             time.sleep(0.5)
 
         elapsed_end = time.time() - session_started
+        window_end_epoch = time.time()
         # final in-session sample
         try:
             final = sample_row("end", elapsed_end, started)
@@ -737,10 +763,10 @@ def main():
                 except OSError:
                     pass
                 after = wait_heartbeat(timeout=180, label="post-teardown")
-                still_traced = service_env_has(trace_path)
-                still_test_input = service_env_has("ENABLE_TEST_STATE_INPUT")
-                log(f"teardown: trace var still set={still_traced} "
-                    f"test-input var still set={still_test_input}")
+                still_traced = process_env_has("TELEMETRY_TRACE_PATH")
+                still_test_input = process_env_has("ENABLE_TEST_STATE_INPUT")
+                log(f"teardown: trace var in process={still_traced} "
+                    f"test-input var in process={still_test_input}")
                 post["after_restart"] = {
                     "heartbeat": after.get("updated_at"),
                     "trace_env_present": still_traced,
@@ -760,13 +786,22 @@ def main():
             "abort_reason": reason,
             "started_utc": iso(started),
             "ended_utc": iso(),
-            "duration_actual_min": round((time.time() - session_started) / 60.0, 2),
+            "window": {
+                "start_utc": dt.datetime.fromtimestamp(
+                    session_started, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "end_utc": dt.datetime.fromtimestamp(
+                    window_end_epoch, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "start_epoch": round(session_started, 3),
+                "end_epoch": round(window_end_epoch, 3),
+                "source": "harness",
+            },
+            "duration_actual_min": round((window_end_epoch - session_started) / 60.0, 2),
             "hotspot": net["ssid"],
             "rssi_dbm_start": net["rssi_dbm"],
             "flaps": flap_rows,
             "safety": {"pre": pre, "post": post},
         }
-        summary.update(trace_stats(trace_path))
+        summary.update(trace_stats(trace_path, session_started, window_end_epoch))
         # aggregate the samples for queue high-water and availability
         rows = []
         try:
