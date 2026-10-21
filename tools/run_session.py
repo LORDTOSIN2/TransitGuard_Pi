@@ -459,6 +459,28 @@ def sample_row(phase, elapsed, session_started):
     }
 
 
+def wait_for_cooldown(max_temp, max_wait_min, log):
+    """Wait (bounded) for the SoC to fall to max_temp before a session.
+
+    Returns (record, temp_now). The record is written into the manifest so a
+    start that needed a cool-down is visible in the results."""
+    started = time.time()
+    trail = []
+    while True:
+        t = temp_c()
+        trail.append({"t": iso(), "temp_c": t})
+        if t is None or t <= max_temp:
+            return {"target_c": max_temp, "max_wait_min": max_wait_min,
+                    "waited_s": round(time.time() - started, 1), "reached": True,
+                    "samples": trail}, t
+        if time.time() - started >= max_wait_min * 60:
+            return {"target_c": max_temp, "max_wait_min": max_wait_min,
+                    "waited_s": round(time.time() - started, 1), "reached": False,
+                    "samples": trail}, t
+        log(f"cool-down: {t} C is above {max_temp} C; waiting before the run")
+        time.sleep(20)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--session", type=int, default=1)
@@ -470,6 +492,10 @@ def main():
     ap.add_argument("--flap-period-s", type=float, default=20.0)
     ap.add_argument("--allow-nonempty-buffer", action="store_true")
     ap.add_argument("--allow-unsynced-clock", action="store_true")
+    ap.add_argument("--max-start-temp", type=float, default=80.0,
+                    help="wait for the SoC to fall to this temperature before starting")
+    ap.add_argument("--cool-wait-min", type=float, default=10.0,
+                    help="maximum cool-down wait before refusing to start")
     ap.add_argument("--skip-restart", action="store_true",
                     help="smoke-test only: do not touch systemd (uses current env)")
     args = ap.parse_args()
@@ -497,10 +523,12 @@ def main():
 
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGHUP, on_signal)   # survive an SSH drop, then tear down
 
     log(f"run_id={run_id} session={args.session} minutes={args.minutes} "
         f"hotspot={args.hotspot!r}")
 
+    cooldown, t_now = wait_for_cooldown(args.max_start_temp, args.cool_wait_min, log)
     pre = safety_readings()
     clock = clock_status()
     net = {
@@ -530,6 +558,7 @@ def main():
             "test_input": "scripted state file (not fatigue actions)",
         },
         "preflight": pre,
+        "cooldown": cooldown,
     }
     write_json(os.path.join(run_dir, "preflight.json"), pre)
     write_json(os.path.join(run_dir, "manifest.json"), manifest)
@@ -542,6 +571,10 @@ def main():
         refusals.append(f"SoC {pre['temp_c']} C exceeds the {MAX_TEMP_C} C limit")
     elif pre["temp_c"] >= 85.0:
         warnings.append(f"SoC {pre['temp_c']} C is at/over the 85 C soft limit")
+    if not cooldown["reached"] and (pre["temp_c"] or 0) > args.max_start_temp:
+        refusals.append(f"SoC stayed at {pre['temp_c']} C, above the "
+                        f"{args.max_start_temp} C start limit, after a "
+                        f"{args.cool_wait_min:.0f} min cool-down wait")
     if (pre["disk_free_mb"] or 0) < MIN_DISK_MB:
         refusals.append(f"only {pre['disk_free_mb']} MB free")
     if clock.get("ntp_synchronized") != "yes" and not args.allow_unsynced_clock:
@@ -603,8 +636,8 @@ def main():
         writer.writerow(first)
         samples_fh.flush()
 
-        log(f"session window {iso(started)} -> +{args.minutes:.0f} min; "
-            f"flap at +{args.flap_start_min:.0f} min for {args.flap_minutes:.0f} min")
+        log(f"session window {iso(started)} -> +{args.minutes:.1f} min; "
+            f"flap at +{args.flap_start_min:.1f} min for {args.flap_minutes:.1f} min")
 
         next_sample = session_started
         flap_idx = 0
