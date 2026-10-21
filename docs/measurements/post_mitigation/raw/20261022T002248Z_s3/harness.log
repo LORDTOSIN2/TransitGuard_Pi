@@ -1,0 +1,17 @@
+[2026-10-22T00:22:48Z] run_id=20261022T002248Z_s3 session=3 minutes=30.0 hotspot='SFM MBB - CONF'
+[2026-10-22T00:22:53Z] installing trace/test-input drop-in and restarting transitguard
+[2026-10-22T00:23:17Z] session window 2026-10-22T00:22:53Z -> +30.0 min; flap at +10.0 min for 3.0 min
+[2026-10-22T00:32:54Z] flap window open
+[2026-10-22T00:32:54Z] flap -> CRITICAL_FATIGUE
+[2026-10-22T00:33:14Z] flap -> NORMAL
+[2026-10-22T00:33:33Z] flap -> DROWSY
+[2026-10-22T00:33:54Z] flap -> NORMAL
+[2026-10-22T00:34:14Z] flap -> CRITICAL_FATIGUE
+[2026-10-22T00:34:33Z] flap -> DROWSY
+[2026-10-22T00:34:54Z] flap -> NORMAL
+[2026-10-22T00:35:14Z] flap -> CRITICAL_FATIGUE
+[2026-10-22T00:35:33Z] flap -> NORMAL
+[2026-10-22T00:35:54Z] flap window closed -> override released
+[2026-10-22T00:52:54Z] teardown: removing drop-in and restarting the service
+[2026-10-22T00:53:17Z] teardown: trace var in process=False test-input var in process=False
+[2026-10-22T00:53:17Z] summary written: scheduled=189 attempted=189 dropped=0 queue_hwm=1
