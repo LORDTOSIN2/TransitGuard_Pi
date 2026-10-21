@@ -16,8 +16,10 @@ explains the artifacts and how to reproduce them.
 
 > **A post-mitigation re-test** (three ~30-minute sessions with a scripted alert window, after
 > the alert rate-limit and GPS/camera fixes) lives in
-> [`post_mitigation/`](post_mitigation/): method, per-session artifacts and interim results.
-> It is currently **1 of 3 sessions complete**; no combined or fleet claim is made.
+> [`post_mitigation/`](post_mitigation/): method, per-session artifacts and results.
+> Combined: **571 / 571 scheduled messages stored, 0 dropped, 0 retried, queue high-water 1**,
+> RTT median 1.53 s / p95 1.91 s / max 6.85 s. Three stationary runs on one hotspot — not a
+> fleet or long-term reliability claim, and the v2.1 outage recheck was not re-run.
 
 ## Naming
 

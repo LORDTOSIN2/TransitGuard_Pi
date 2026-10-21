@@ -309,6 +309,24 @@ Backups exist alongside it: `/etc/transitguard.env.bak-run2-*`, `.bak-run3-*`, `
 | HTTP RTT | median **1.65 s**, p95 **3.79 s**, max 17.0 s (578 samples) |
 | Alert-path loss before the fix | **49 %** (fixed in `46077a2`) |
 
+**Post-mitigation re-test (3 × 30 min, 2026-10-21/22, same hotspot, scripted alert window):**
+
+| Metric | Value |
+|---|---|
+| Scheduled / attempted / stored unique | 571 / 571 / 571 |
+| Dropped / retried | 0 / 0 |
+| Queue high-water | 1 message |
+| Stored per scheduled | 100.00 % |
+| RTT (response-only) | median 1.53 s, p95 1.91 s, p99 3.82 s, max 6.85 s |
+| GPS fix availability | 0 % in all three sessions (no TTFF) |
+| Camera metric availability | 0 %, 1.1 %, 0 % |
+| Power state | `get_throttled 0x50005` (under-voltage + throttled) throughout |
+
+Details, per-session tables and the raw artifacts are in
+[`docs/measurements/post_mitigation/`](docs/measurements/post_mitigation/). The
+v2.1 outage-recovery recheck was **not** re-run, so the 2026-10-16 recovery
+figures remain the only trace-verified recovery evidence.
+
 ---
 
 ## 10. Current known state & gotchas

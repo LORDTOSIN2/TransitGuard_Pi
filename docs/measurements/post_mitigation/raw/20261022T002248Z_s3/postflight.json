@@ -1,0 +1,45 @@
+{
+  "after_restart": {
+    "heartbeat": "01:53:17",
+    "readings": {
+      "buffer_count": 0,
+      "captured_utc": "2026-10-22T00:53:17Z",
+      "disk_free_mb": 578.6,
+      "mem_available_mb": 7268.9,
+      "temp_c": 76.4,
+      "temp_limit_c": 86.0,
+      "throttled_decoded": {
+        "bits_set": [
+          "under-voltage NOW",
+          "currently throttled",
+          "under-voltage has occurred",
+          "throttling has occurred"
+        ],
+        "clean": false,
+        "raw": "0x50005"
+      },
+      "throttled_hex": "0x50005",
+      "uptime_s": 2276.9
+    },
+    "test_input_env_present": false,
+    "trace_env_present": false
+  },
+  "buffer_count": 0,
+  "captured_utc": "2026-10-22T00:52:54Z",
+  "disk_free_mb": 578.4,
+  "mem_available_mb": 7271.0,
+  "temp_c": 77.9,
+  "temp_limit_c": 86.0,
+  "throttled_decoded": {
+    "bits_set": [
+      "under-voltage NOW",
+      "currently throttled",
+      "under-voltage has occurred",
+      "throttling has occurred"
+    ],
+    "clean": false,
+    "raw": "0x50005"
+  },
+  "throttled_hex": "0x50005",
+  "uptime_s": 2253.0
+}

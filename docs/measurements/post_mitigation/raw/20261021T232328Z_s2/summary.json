@@ -303,7 +303,7 @@
     },
     "queue_high_water": 1,
     "retried": 0,
-    "rows_fetched_padded": 214,
+    "rows_fetched_padded": 215,
     "rows_in_window": 193,
     "rssi_dbm": -78,
     "rtt_ms_all_attempts": {

@@ -1,30 +1,30 @@
 {
   "combined": {
-    "accepted_http201": 382,
-    "attempted": 382,
-    "attempted_unique": 382,
+    "accepted_http201": 571,
+    "attempted": 571,
+    "attempted_unique": 571,
     "dropped": 0,
-    "duration_min_total": 60.0,
+    "duration_min_total": 90.0,
     "http_acceptance_pct": 100.0,
     "queue_high_water_max": 1,
     "retried": 0,
     "rtt_ms_http201": {
       "max": 6850.8,
-      "mean": 1631.3,
-      "median": 1526.8,
-      "min": 1356.2,
-      "n": 382,
-      "p90": 1744.7,
-      "p95": 1952.4,
-      "p99": 6525.4,
-      "stdev": 603.8
+      "mean": 1615.9,
+      "median": 1527.0,
+      "min": 1286.8,
+      "n": 571,
+      "p90": 1753.4,
+      "p95": 1911.2,
+      "p99": 3823.1,
+      "stdev": 541.7
     },
-    "runs": 2,
-    "scheduled": 382,
+    "runs": 3,
+    "scheduled": 571,
     "scheduled_never_attempted": 0,
     "stored_per_attempt_pct": 100.0,
     "stored_per_scheduled_pct": 100.0,
-    "stored_unique": 382
+    "stored_unique": 571
   },
   "notes": [
     "Per-session numbers are reported separately; the combined row does not claim fleet or long-term reliability.",
@@ -148,7 +148,7 @@
       },
       "queue_high_water": 1,
       "retried": 0,
-      "rows_fetched_padded": 214,
+      "rows_fetched_padded": 215,
       "rows_in_window": 193,
       "rssi_dbm": -78,
       "rtt_ms_all_attempts": {
@@ -195,6 +195,88 @@
       "window_end_utc": "2026-10-21T23:53:34.332000+00:00",
       "window_source": "harness",
       "window_start_utc": "2026-10-21T23:23:34.294000+00:00"
+    },
+    {
+      "abort_reason": null,
+      "aborted": false,
+      "accepted_http201": 189,
+      "attempted": 189,
+      "attempted_unique": 189,
+      "availability": {
+        "camera_metric_present_pct": 0.0,
+        "gps_first_fix_elapsed_s": null,
+        "gps_fix_pct": 0.0,
+        "heartbeat_present_pct": 100.0,
+        "sample_count": 182
+      },
+      "buffer_high_water": 0,
+      "cadence_s": {
+        "max": 10.08,
+        "mean": 9.44,
+        "median": 10.02,
+        "min": 4.95
+      },
+      "dropped": 0,
+      "duration_min": 30.0,
+      "hotspot": "SFM MBB - CONF",
+      "http201_but_not_stored": 0,
+      "http_acceptance_pct": 100.0,
+      "manifest": {
+        "app_file_sha256": "4f06399293118f76b91ae342ffa6584d26a9e4ac0149e1d5f2bd17552dd88b29",
+        "app_git_head": "910de891b7cf6d6bbdedeab181ce381cbacaf955",
+        "kernel": "6.12.93+rpt-rpi-v8",
+        "model_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+        "python": "Python 3.11.2"
+      },
+      "queue_high_water": 1,
+      "retried": 0,
+      "rows_fetched_padded": 212,
+      "rows_in_window": 189,
+      "rssi_dbm": -74,
+      "rtt_ms_all_attempts": {
+        "max": 6527.2,
+        "mean": 1584.9,
+        "median": 1527.0,
+        "min": 1286.8,
+        "n": 189,
+        "p90": 1754.1,
+        "p95": 1809.8,
+        "p99": 2032.7,
+        "stdev": 386.5
+      },
+      "rtt_ms_failures": {
+        "n": 0
+      },
+      "rtt_ms_http201": {
+        "max": 6527.2,
+        "mean": 1584.9,
+        "median": 1527.0,
+        "min": 1286.8,
+        "n": 189,
+        "p90": 1754.1,
+        "p95": 1809.8,
+        "p99": 2032.7,
+        "stdev": 386.5
+      },
+      "run_id": "20261022T002248Z_s3",
+      "safety": {
+        "post": 77.9,
+        "pre": 66.2,
+        "temp_max_sampled": 77.9,
+        "throttled_post": "0x50005",
+        "throttled_pre": "0x50005"
+      },
+      "scheduled": 189,
+      "scheduled_never_attempted": 0,
+      "scheduled_unique": 189,
+      "scripted_flaps": 10,
+      "session": 3,
+      "stored_per_attempt_pct": 100.0,
+      "stored_per_scheduled_pct": 100.0,
+      "stored_unique": 189,
+      "window_end_utc": "2026-10-22T00:52:53.848000+00:00",
+      "window_source": "harness",
+      "window_start_utc": "2026-10-22T00:22:53.782000+00:00"
     }
   ]
 }

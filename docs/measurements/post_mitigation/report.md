@@ -1,177 +1,192 @@
-# Post-mitigation Wi-Fi/HTTPS re-test — interim results
+# Post-mitigation Wi-Fi/HTTPS re-test — results
 
-**Status: 2 of 3 sessions complete (2026-10-21).** Session 3 is pending; this
-file is updated after each. Method, artifacts and non-claims are in
-[`README.md`](README.md).
+**Status: 3 of 3 sessions complete (2026-10-21/22).** Method, artifacts and
+non-claims are in [`README.md`](README.md); generated tables are in
+[`campaign_tables.md`](campaign_tables.md).
 
 The mitigation under test is the alert-publish rate limit (`46077a2`) plus the
 GPS/camera busy-spin fix (`c53d1e3`), re-measured on the upload path
-(Pi → Edge Function → Postgres). No ingest outage is induced in these sessions.
+(Pi → Edge Function → Postgres). No ingest outage was induced in these sessions;
+the separate recovery recheck was **not** run (see *Not completed*).
 
-## Common conditions
+## What was tested
+
+Three consecutive ~30-minute sessions on a single named hotspot, vehicle
+stationary, routine telemetry at the configured 10 s cadence throughout. Each
+session included one 3-minute scripted alert/state-flap window starting 10
+minutes in, driven through the gated test-only state file — **no fatigue actions
+were performed in front of a driver**.
+
+## Common conditions (from each session's manifest)
 
 | Item | Value |
 |---|---|
-| Hotspot | `SFM MBB - CONF` (single named hotspot) |
+| Hotspot | `SFM MBB - CONF` (all sessions) |
 | Pi address | 10.80.3.194 |
-| App | `c2ad776` (working tree dirty only with untracked `logs/` and helper scripts) |
-| `vehicle_monitor.py` SHA-256 | `4f0639…8b29` |
-| `face_landmarker.task` SHA-256 | `64184e…c9ff` |
+| App code | `vehicle_monitor.py` SHA-256 `4f0639929311…` — **identical in all three sessions** |
+| Git HEAD during run | `c2ad776` (s1), `910de89` (s2, s3); only harness/docs changed between them |
+| Working tree | dirty only with untracked `logs/` and helper scripts |
+| Model | `face_landmarker.task` SHA-256 `64184e229b26…` |
 | OS / kernel / Python | Debian 12 (bookworm) / `6.12.93+rpt-rpi-v8` / 3.11.2 |
+| Packages | 54 (recorded in each `manifest.json`) |
 | Clock | NTP synchronised, `Africa/Lagos` (UTC+1) |
-| Vehicle | stationary, routine 10 s telemetry throughout |
-| Scripted window | +10 min, 3 min, state written every 20 s, then override released |
+| SoC limit enforced | 86 °C abort; start gate 75–80 °C, bounded cool-down wait |
+| Vehicle | stationary (no drive) |
 
-Each session runs in its own `raw/<UTC>_s<N>/` folder with its own
-`manifest.json`, `preflight.json`, `postflight.json`, `samples.csv`,
-`flaps.csv`, `telemetry_trace.jsonl`, `summary.json` and
-`reconciled_messages.csv`.
+Sessions were separated by a real cool-down: s1→s2 ≈ 37 min, s2→s3 ≈ 29 min.
+Start temperatures were 75.0, 60.9 and 66.2 °C.
 
-## Session 1 — 22:16:36–22:46:36 UTC
+## Delivery and queue reconciliation — per session and combined
 
-| Metric | Value |
-|---|---|
-| Scheduled / attempted / attempted unique | 190 / 190 / 190 |
-| Stored unique server-side | 190 |
-| Dropped / retried / never attempted | 0 / 0 / 0 |
-| HTTP 201 acceptance | 100.00 % |
-| Stored per attempted / per scheduled | 100.00 % / 100.00 % |
-| Queue high-water | 1 message (offline buffer 0) |
-| Cadence | median 10.02 s, mean 9.39 s, min 4.95 s, max 10.53 s |
-| RSSI at start | −76 dBm |
-| SoC before / after / max | 75.0 / 78.4 / 79.4 °C |
-| `get_throttled` before / after | `0x50005` / `0x50005` |
+| Metric | Run 1 | Run 2 | Run 3 | Combined |
+|---|---|---|---|---|
+| Window (UTC) | 22:16:36–22:46:36 | 23:23:34–23:53:34 | 00:22:53–00:52:53 | — |
+| Scheduled | 190 | 192 | 189 | **571** |
+| Attempted (HTTP POSTs) | 190 | 192 | 189 | **571** |
+| Attempted unique | 190 | 192 | 189 | **571** |
+| Accepted HTTP 201 | 190 | 192 | 189 | **571** |
+| Stored unique (server) | 190 | 192 | 189 | **571** |
+| Dropped from queue | 0 | 0 | 0 | **0** |
+| Retried | 0 | 0 | 0 | **0** |
+| Scheduled, never attempted | 0 | 0 | 0 | **0** |
+| HTTP 201 acceptance, % | 100.00 | 100.00 | 100.00 | **100.00** |
+| Stored / attempted, % | 100.00 | 100.00 | 100.00 | **100.00** |
+| Stored / scheduled, % | 100.00 | 100.00 | 100.00 | **100.00** |
+| Queue high-water (msgs) | 1 | 1 | 1 | **1** |
+| Offline-buffer high-water | 0 | 0 | 0 | **0** |
+| Cadence median / mean | 10.02 / 9.39 s | 10.02 / 9.31 s | 10.02 / 9.44 s | — |
+| Cadence min / max | 4.95 / 10.53 s | 4.96 / 10.10 s | 4.95 / 10.08 s | — |
+| Duration | 30.0 min | 30.0 min | 30.0 min | 90.0 min |
 
-## Session 2 — 23:23:34–23:53:34 UTC
+The ~5 s cadence minimum is the alert-path floor (`ALERT_PUBLISH_MIN_INTERVAL_SEC
+= 5`) during the scripted window, not a cadence fault. Combined ratios are
+computed from totals, not by averaging percentages.
 
-| Metric | Value |
-|---|---|
-| Scheduled / attempted / attempted unique | 192 / 192 / 192 |
-| Stored unique server-side | 192 |
-| Dropped / retried / never attempted | 0 / 0 / 0 |
-| HTTP 201 acceptance | 100.00 % |
-| Stored per attempted / per scheduled | 100.00 % / 100.00 % |
-| Queue high-water | 1 message (offline buffer 0) |
-| Cadence | median 10.02 s, mean 9.31 s, min 4.96 s, max 10.10 s |
-| RSSI at start | −78 dBm |
-| SoC before / after / max | 60.9 / 77.4 / 77.9 °C |
-| `get_throttled` before / after | `0x50005` / `0x50005` |
+## Response-only HTTP RTT (Pi monotonic timer, request → response)
 
-Session 2 started after a 37-minute cool-down (61 °C at launch) and reached a
-lower peak than session 1. Teardown was verified against the running process:
-`TELEMETRY_TRACE_PATH` and `ENABLE_TEST_STATE_INPUT` were both absent afterwards.
+| RTT (ms) | Run 1 | Run 2 | Run 3 | Combined |
+|---|---|---|---|---|
+| n | 190 | 192 | 189 | 571 |
+| min | 1356.2 | 1406.2 | 1286.8 | 1286.8 |
+| median | 1478.0 | 1566.9 | 1527.0 | 1527.0 |
+| mean | 1502.8 | 1758.4 | 1584.9 | 1615.9 |
+| p90 | 1604.9 | 1926.7 | 1754.1 | 1753.4 |
+| p95 | 1673.0 | 2178.9 | 1809.8 | 1911.2 |
+| p99 | 1895.2 | 6651.6 | 2032.7 | 3823.1 |
+| stdev | 105.4 | 826.7 | 386.5 | 541.7 |
+| max | 2245.8 | 6850.8 | 6527.2 | 6850.8 |
 
-## Delivery and queue, per session and combined
+**The tail is the story, not the median.** Six of 571 requests (1.05 %) exceeded
+3 s: five in run 2 (6.5–6.9 s, scattered 23:27–23:40 UTC) and one in run 3
+(6.53 s at 00:37:01 UTC). All six returned HTTP 201, so they are latency
+outliers, not losses. Median moved by only ~89 ms across sessions while p99
+ranged from 1.9 s to 6.7 s. `HTTP_TIMEOUT_SEC` applies per socket operation,
+which is why a 6.85 s request can still succeed.
 
-| Metric | Run 1 | Run 2 | Combined |
+This is **not** end-to-end delay; it excludes queue wait and clock skew.
+
+## Signal availability (10 s samples, n = 182 per session)
+
+| Signal | Run 1 | Run 2 | Run 3 |
 |---|---|---|---|
-| Scheduled | 190 | 192 | 382 |
-| Attempted (HTTP POSTs) | 190 | 192 | 382 |
-| Attempted unique | 190 | 192 | 382 |
-| Stored unique (server) | 190 | 192 | 382 |
-| Dropped from queue | 0 | 0 | 0 |
-| Retried | 0 | 0 | 0 |
-| Scheduled, never attempted | 0 | 0 | 0 |
-| HTTP 201 acceptance, % | 100.00 | 100.00 | 100.00 |
-| Stored / attempted, % | 100.00 | 100.00 | 100.00 |
-| Stored / scheduled, % | 100.00 | 100.00 | 100.00 |
-| Queue high-water | 1 | 1 | 1 |
-| Duration, min | 30.0 | 30.0 | 60.0 |
+| `/data` heartbeat present | 100.0 % | 100.0 % | 100.0 % |
+| GPS fix available | 0.0 % | 0.0 % | 0.0 % |
+| GPS time-to-first-fix | not achieved | not achieved | not achieved |
+| Camera metric present (`ear`/`mar`/`perclos`/`pitch`) | 0.0 % | 1.1 % | 0.0 % |
 
-Combined ratios are computed from the totals, not averaged from the two
-percentages. They are descriptive of these two runs, not a reliability claim.
+GPS never reported a fix in any session (`sats_used = 0`, `fix_quality = 0`), so
+**no time-to-first-fix exists** for this campaign. In run 2 the camera pipeline
+produced all four metrics for two consecutive samples (23:28:14–23:28:24 UTC)
+while classifying `DROWSY`, then went unavailable again.
 
-## HTTP round-trip time (response-only, Pi monotonic timer)
+These are **availability** observations. No detection-accuracy claim is made:
+there is no reference measurement of the driver's actual eye/mouth state, and no
+surveyed GPS reference position.
 
-| RTT | Run 1 | Run 2 | Combined |
+## Safety readings — before and after each session
+
+| Reading | Run 1 | Run 2 | Run 3 |
 |---|---|---|---|
-| n | 190 | 192 | 382 |
-| min | 1356.2 | 1406.2 | 1356.2 |
-| median | 1478.0 | 1566.9 | 1526.8 |
-| mean | 1502.8 | 1758.4 | 1631.3 |
-| p90 | 1604.9 | 1926.7 | 1744.7 |
-| p95 | 1673.0 | 2178.9 | 1952.4 |
-| p99 | 1895.2 | 6651.6 | 6525.4 |
-| stdev | 105.4 | 826.7 | 603.8 |
-| max | 2245.8 | 6850.8 | 6850.8 |
-
-**Session 2 has a heavy tail:** five attempts took 6.5–6.9 s, spread across
-23:27–23:40 UTC and not clustered in the scripted window. All returned HTTP 201,
-so they are latency outliers, not losses. The median moved only ~89 ms between
-sessions while p99 moved by ~4.8 s — the link, not the queue, is responsible.
-`HTTP_TIMEOUT_SEC` applies per socket operation, which is why a 6.85 s request
-can still succeed (documented caveat, unchanged).
-
-This is **not** end-to-end delay.
-
-## Availability (10 s samples, n = 182 per session)
-
-| Signal | Run 1 | Run 2 |
-|---|---|---|
-| `/data` heartbeat present | 100.0 % | 100.0 % |
-| GPS fix available | 0.0 % | 0.0 % |
-| GPS time-to-first-fix | not achieved | not achieved |
-| Camera metric present (`ear`/`mar`/`perclos`/`pitch`) | 0.0 % | 1.1 % |
-
-In session 2 the camera pipeline produced all four metrics for two consecutive
-samples (23:28:14–23:28:24 UTC) while classifying `DROWSY`, then went unavailable
-again. That is a **signal-availability** observation, not a detection-accuracy
-result: there is no reference measurement of the driver's actual eye state.
-
-GPS never achieved a fix in either session (`sats_used = 0`), so no
-time-to-first-fix can be reported.
-
-## Safety
-
-| Reading | Run 1 | Run 2 |
-|---|---|---|
-| SoC before | 75.0 °C | 60.9 °C |
-| SoC after | 78.4 °C | 77.4 °C |
-| SoC max sampled | 79.4 °C | 77.9 °C |
-| `get_throttled` before | `0x50005` | `0x50005` |
-| `get_throttled` after | `0x50005` | `0x50005` |
-| Offline buffer at start | 0 | 0 |
-| Free disk at start | 579.3 MB | 579.0 MB |
+| SoC before | 75.0 °C | 60.9 °C | 66.2 °C |
+| SoC after | 78.4 °C | 77.4 °C | 77.9 °C |
+| SoC max sampled | 79.4 °C | 77.9 °C | 77.9 °C |
+| `get_throttled` before | `0x50005` | `0x50005` | `0x50005` |
+| `get_throttled` after | `0x50005` | `0x50005` | `0x50005` |
+| Offline buffer at start | 0 | 0 | 0 |
+| Free disk at start | 579.3 MB | 579.0 MB | 578.7 MB |
+| Mem available at start | 7295.5 MB | 7235.7 MB | 7253.7 MB |
 
 `0x50005` decodes to **under-voltage NOW + currently throttled**, with
-under-voltage and throttling having occurred earlier in the boot. Both sessions
-stayed below the 86 °C abort limit, but neither is a clean-power run and neither
-is described as one.
+under-voltage and throttling having occurred earlier in the boot. Every session
+stayed below the 86 °C abort limit, but **none is a clean-power run** and none is
+described as one. A 6.85 s RTT tail and the camera dropouts are plausible
+symptoms of the same power/thermal constraint; this campaign does not isolate
+that cause.
 
-## Interpretation, limited to what two sessions support
+## Interpretation, limited to this campaign
 
-* Across 60 minutes and 382 scheduled messages on this hotspot, every scheduled
-  message was accepted and stored (382/382), with zero queue drops and zero
-  retries. The scripted alert/transition window did not push the queue above one
-  message in either session.
-* The pre-fix failure mode (a single alert burst dropping 34 messages) did not
-  reproduce in either post-fix session.
-* Latency is dominated by a stable base (~1.5 s median) with occasional
-  multi-second outliers on this hotspot; session 2 shows the tail can reach
-  ~6.9 s while still succeeding.
-* Two half-hour sessions are still not evidence of fleet or long-term
-  reliability, and nothing here establishes field effectiveness in a real drive.
+* Across 90 minutes and 571 scheduled messages on one hotspot, every scheduled
+  message was accepted and stored (571/571), with zero queue drops and zero
+  retries.
+* The pre-fix failure mode — a single alert burst dropping 34 messages in run 3
+  of the 2026-10-16 study — **did not reproduce**. The scripted alert window never
+  pushed the in-memory queue above one message.
+* Latency is a stable base (~1.5 s median) with rare multi-second outliers
+  (1.05 % > 3 s). The outliers are link-side, not queue-side: the queue never
+  held more than one message and there were no retries.
+* This is **not** evidence of fleet or long-term reliability. Three half-hours on
+  one hotspot are three observations.
+* Field effectiveness is **not** established: these are stationary bench runs
+  with scripted input, not a real drive.
+
+## Minimum-results checklist
+
+| Requested result | Status |
+|---|---|
+| Delivery/queue reconciliation + RTT stats, per run and combined | **Done** — tables above; machine-readable in `campaign_summary.json` |
+| Trace-verified outage recovery from v2.1 | **Not completed** — limitation retained; see below |
+| GPS fix availability and time-to-first-fix, no accuracy claim | **Done** — 0 % availability, no fix, no TTFF |
+| Camera-pipeline signal availability, no accuracy claim | **Done** — 0 %, 1.1 %, 0 % |
+| Software/test manifest + safety pre/post readings | **Done** — per-session `manifest.json`, `preflight.json`, `postflight.json`, summarised above |
 
 ## Measurement notes
 
-* **Session 1 window.** Session 1 used the first harness version, whose teardown
-  removed the systemd drop-in without restarting the service. The old process
-  kept tracing for ~2.3 min, leaving 205 events in the file. The window
-  `22:16:36–22:46:36 UTC` was reconstructed from `harness.log`, and the
-  reconciler clips to it, giving 190 in-session messages. The 15 post-window
-  messages are excluded from every figure above. This defect is fixed: session 2
-  restarted on teardown and verified the environment was gone.
+* **Session 1 window reconstruction.** Session 1 ran with the first harness
+  version, whose teardown removed the systemd drop-in without restarting the
+  service. The old process kept tracing for ~2.3 min, leaving 205 events in the
+  file. The window `22:16:36–22:46:36 UTC` was reconstructed from `harness.log`
+  and the reconciler clips to it, giving 190 in-session messages; the 15
+  post-window messages are excluded from every figure. Fixed for sessions 2–3:
+  teardown now restarts and verifies the variables are absent from
+  `/proc/<pid>/environ` (`trace var in process=False`).
 * **Duplicates.** The ingest function upserts with `ignoreDuplicates`, so a
   re-send returns 201 and stores nothing. Stored counts come from the
   `telemetry` table.
-* **Scripted input.** Every packet produced during the flap windows carries
-  `testInjection.state` in `raw_payload`, and the trace records
-  `test_injected_state`. Those messages are test stimulus, not detections.
+* **Scripted input.** Every affected packet carries `testInjection.state` in
+  `raw_payload`; verified server-side, e.g. run 2 at 23:33:37 UTC stored
+  `driverState = CRITICAL_FATIGUE` with
+  `testInjection = {source: test-state-input, enabled: true, …}`, while the
+  pre-write frame at 23:33:32 UTC was `NORMAL` with no marker. The trace also
+  records `test_injected_state`.
 
-## Pending
+## Not completed
 
-* Session 3 (30 min, same hotspot, same 3-minute scripted window).
-* Final combined table across all three sessions.
-* Optional v2.1 outage-recovery recheck; `tools/run_outage_trials.sh` on the Pi
-  matches the fixed v2.1 version. Its canonical artifact names mean the
-  2026-10-16 files must be archived on the Pi before that run.
+* **v2.1 outage-recovery recheck.** The fixed script
+  (`tools/run_outage_trials.sh`, v2.1 verdict expression) is deployed and matches
+  the repository, but the 3 × 5 min trials were not re-run in this campaign. The
+  previous result — 3/3 recovered, 0 dropped, 93/93 stored, buffer drained in
+  89–123 s — is therefore **not** re-verified here, and no post-mitigation
+  recovery claim is made. Running it requires archiving the 2026-10-16
+  canonical files on the Pi first.
+
+## Reproduce
+
+```bash
+# on the Pi, one 30-minute session
+python3 tools/run_session.py --session 4 --minutes 30 \
+    --hotspot "SFM MBB - CONF" --flap-start-min 10 --flap-minutes 3 \
+    --max-start-temp 75
+
+# anywhere with network access
+python tools/analyze_campaign.py logs/runs/<run_dir> --out docs/measurements/post_mitigation
+```
