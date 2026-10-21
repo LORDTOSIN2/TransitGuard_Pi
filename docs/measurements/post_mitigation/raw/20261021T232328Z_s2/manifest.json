@@ -1,0 +1,165 @@
+{
+  "clock": {
+    "chronyc_tracking": null,
+    "local_now": "2026-10-22T00:23:29+01:00",
+    "ntp_synchronized": "yes",
+    "offset_from_utc_s": 3600.0,
+    "timezone": "Africa/Lagos",
+    "utc_now": "2026-10-21T23:23:29Z"
+  },
+  "cooldown": {
+    "max_wait_min": 20.0,
+    "reached": true,
+    "samples": [
+      {
+        "t": "2026-10-21T23:23:28Z",
+        "temp_c": 60.9
+      }
+    ],
+    "target_c": 75.0,
+    "waited_s": 0.0
+  },
+  "network_at_start": {
+    "ingest": {
+      "http_status": 401,
+      "reachable": true
+    },
+    "ip": "10.80.3.194",
+    "rssi_dbm": -78,
+    "ssid": "SFM MBB - CONF"
+  },
+  "plan": {
+    "duration_min": 30.0,
+    "flap_minutes": 3.0,
+    "flap_period_s": 20.0,
+    "flap_sequence": [
+      "CRITICAL_FATIGUE",
+      "NORMAL",
+      "DROWSY",
+      "NORMAL",
+      "CRITICAL_FATIGUE",
+      "DROWSY",
+      "NORMAL"
+    ],
+    "flap_start_min": 10.0,
+    "required_hotspot": "SFM MBB - CONF",
+    "routine_cadence_sec": 10,
+    "sample_sec": 10.0,
+    "test_input": "scripted state file (not fatigue actions)",
+    "vehicle_stationary": true
+  },
+  "preflight": {
+    "buffer_count": 0,
+    "captured_utc": "2026-10-21T23:23:28Z",
+    "disk_free_mb": 579.0,
+    "mem_available_mb": 7235.7,
+    "temp_c": 60.9,
+    "temp_limit_c": 86.0,
+    "throttled_decoded": {
+      "bits_set": [
+        "under-voltage NOW",
+        "currently throttled",
+        "under-voltage has occurred",
+        "throttling has occurred"
+      ],
+      "clean": false,
+      "raw": "0x50005"
+    },
+    "throttled_hex": "0x50005",
+    "uptime_s": 171.6
+  },
+  "run_id": "20261021T232328Z_s2",
+  "session": 2,
+  "software": {
+    "app_file_sha256": "4f06399293118f76b91ae342ffa6584d26a9e4ac0149e1d5f2bd17552dd88b29",
+    "app_git_dirty": true,
+    "app_git_head": "910de891b7cf6d6bbdedeab181ce381cbacaf955",
+    "app_git_status": [
+      "?? logs/",
+      "?? run_outage_trials.sh",
+      "?? run_outage_trials_v2.sh",
+      "?? tg_ready.sh"
+    ],
+    "config_keys": {
+      "BUFFER_DB_PATH": "/home/john/.transitguard_buffer.db",
+      "ENABLE_PREVIEW": "false",
+      "MAX_BUFFERED_PACKETS": "5000",
+      "PUBLISH_INTERVAL_SEC": "10.0",
+      "SUPABASE_INGEST_URL": "https://hfzqfcuezuxcgaifxqok.supabase.co/functions/v1/ingest-telemetry",
+      "TRANSITGUARD_DEVICE_ID": "BUS-101",
+      "TRANSITGUARD_DEVICE_TOKEN": "<redacted>",
+      "WIFI_SWITCH_ENABLED": "true",
+      "WIFI_SWITCH_HOME_SSID": "Redmi 14C",
+      "WIFI_SWITCH_TARGET_PASSWORD": "<redacted>",
+      "WIFI_SWITCH_TARGET_SSID": "SFM MBB - CONF"
+    },
+    "config_sha256": "288bd62f72a2032a5fbce4aa893d92be2c7262df0228a505943b7d161ad21f4b",
+    "cpu_count": 4,
+    "hardware_model": "Raspberry Pi 4 Model B Rev 1.4",
+    "kernel": "6.12.93+rpt-rpi-v8",
+    "model_file": "face_landmarker.task",
+    "model_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+    "os_pretty_name": "Debian GNU/Linux 12 (bookworm)",
+    "packages": [
+      "absl-py==2.5.0",
+      "Adafruit-Blinka==9.2.0",
+      "Adafruit-Blinka-Raspberry-Pi5-Neopixel==1.0.0rc2",
+      "adafruit-circuitpython-ads1x15==3.0.5",
+      "adafruit-circuitpython-busdevice==5.2.17",
+      "adafruit-circuitpython-connectionmanager==3.1.8",
+      "adafruit-circuitpython-requests==4.1.17",
+      "adafruit-circuitpython-typing==1.12.3",
+      "Adafruit-PlatformDetect==3.89.1",
+      "Adafruit-PureIO==1.1.11",
+      "attrs==26.1.0",
+      "binho-host-adapter==0.1.6",
+      "blinker==1.9.0",
+      "certifi==2026.7.22",
+      "cffi==2.1.1",
+      "charset-normalizer==3.5.1",
+      "click==8.5.0",
+      "contourpy==1.3.3",
+      "cycler==0.12.1",
+      "Flask==3.1.3",
+      "flatbuffers==25.12.19",
+      "fonttools==4.64.0",
+      "idna==3.19",
+      "itsdangerous==2.2.0",
+      "Jinja2==3.1.6",
+      "kiwisolver==1.5.1",
+      "lgpio==0.2.2.0",
+      "MarkupSafe==3.0.3",
+      "matplotlib==3.11.1",
+      "mediapipe==0.10.9",
+      "numpy==2.4.6",
+      "opencv-contrib-python==5.0.0.93",
+      "opencv-python==5.0.0.93",
+      "packaging==26.3",
+      "pillow==12.3.0",
+      "protobuf==3.20.3",
+      "psutil==7.2.2",
+      "pycparser==3.0",
+      "pyftdi==0.57.2",
+      "pynmea2==1.19.0",
+      "pyparsing==3.3.2",
+      "pyserial==3.5",
+      "python-dateutil==2.9.0.post0",
+      "pyusb==1.3.1",
+      "requests==2.34.2",
+      "RPi.GPIO==0.7.1",
+      "rpi_ws281x==5.0.0",
+      "RPLCD==1.4.0",
+      "six==1.17.0",
+      "sounddevice==0.5.6",
+      "sysv_ipc==1.2.0",
+      "typing_extensions==4.16.0",
+      "urllib3==2.7.0",
+      "Werkzeug==3.1.8"
+    ],
+    "python": "Python 3.11.2",
+    "python_executable": "/home/john/fatigue/fatigue-env/bin/python3",
+    "systemd_unit": "transitguard.service"
+  },
+  "started_utc": "2026-10-21T23:23:30Z",
+  "timezone": "Africa/Lagos"
+}

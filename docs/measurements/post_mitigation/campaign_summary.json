@@ -1,30 +1,30 @@
 {
   "combined": {
-    "accepted_http201": 190,
-    "attempted": 190,
-    "attempted_unique": 190,
+    "accepted_http201": 382,
+    "attempted": 382,
+    "attempted_unique": 382,
     "dropped": 0,
-    "duration_min_total": 30.0,
+    "duration_min_total": 60.0,
     "http_acceptance_pct": 100.0,
     "queue_high_water_max": 1,
     "retried": 0,
     "rtt_ms_http201": {
-      "max": 2245.8,
-      "mean": 1502.8,
-      "median": 1478.0,
+      "max": 6850.8,
+      "mean": 1631.3,
+      "median": 1526.8,
       "min": 1356.2,
-      "n": 190,
-      "p90": 1604.9,
-      "p95": 1673.0,
-      "p99": 1895.2,
-      "stdev": 105.4
+      "n": 382,
+      "p90": 1744.7,
+      "p95": 1952.4,
+      "p99": 6525.4,
+      "stdev": 603.8
     },
-    "runs": 1,
-    "scheduled": 190,
+    "runs": 2,
+    "scheduled": 382,
     "scheduled_never_attempted": 0,
     "stored_per_attempt_pct": 100.0,
     "stored_per_scheduled_pct": 100.0,
-    "stored_unique": 190
+    "stored_unique": 382
   },
   "notes": [
     "Per-session numbers are reported separately; the combined row does not claim fleet or long-term reliability.",
@@ -113,6 +113,88 @@
       "window_end_utc": "2026-10-21T22:46:36+00:00",
       "window_source": "harness.log (reconstructed after the pre-fix teardown failed to restart the unit)",
       "window_start_utc": "2026-10-21T22:16:36+00:00"
+    },
+    {
+      "abort_reason": null,
+      "aborted": false,
+      "accepted_http201": 192,
+      "attempted": 192,
+      "attempted_unique": 192,
+      "availability": {
+        "camera_metric_present_pct": 1.1,
+        "gps_first_fix_elapsed_s": null,
+        "gps_fix_pct": 0.0,
+        "heartbeat_present_pct": 100.0,
+        "sample_count": 182
+      },
+      "buffer_high_water": 0,
+      "cadence_s": {
+        "max": 10.1,
+        "mean": 9.31,
+        "median": 10.02,
+        "min": 4.96
+      },
+      "dropped": 0,
+      "duration_min": 30.0,
+      "hotspot": "SFM MBB - CONF",
+      "http201_but_not_stored": 0,
+      "http_acceptance_pct": 100.0,
+      "manifest": {
+        "app_file_sha256": "4f06399293118f76b91ae342ffa6584d26a9e4ac0149e1d5f2bd17552dd88b29",
+        "app_git_head": "910de891b7cf6d6bbdedeab181ce381cbacaf955",
+        "kernel": "6.12.93+rpt-rpi-v8",
+        "model_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+        "python": "Python 3.11.2"
+      },
+      "queue_high_water": 1,
+      "retried": 0,
+      "rows_fetched_padded": 214,
+      "rows_in_window": 193,
+      "rssi_dbm": -78,
+      "rtt_ms_all_attempts": {
+        "max": 6850.8,
+        "mean": 1758.4,
+        "median": 1566.9,
+        "min": 1406.2,
+        "n": 192,
+        "p90": 1926.7,
+        "p95": 2178.9,
+        "p99": 6651.6,
+        "stdev": 826.7
+      },
+      "rtt_ms_failures": {
+        "n": 0
+      },
+      "rtt_ms_http201": {
+        "max": 6850.8,
+        "mean": 1758.4,
+        "median": 1566.9,
+        "min": 1406.2,
+        "n": 192,
+        "p90": 1926.7,
+        "p95": 2178.9,
+        "p99": 6651.6,
+        "stdev": 826.7
+      },
+      "run_id": "20261021T232328Z_s2",
+      "safety": {
+        "post": 77.4,
+        "pre": 60.9,
+        "temp_max_sampled": 77.9,
+        "throttled_post": "0x50005",
+        "throttled_pre": "0x50005"
+      },
+      "scheduled": 192,
+      "scheduled_never_attempted": 0,
+      "scheduled_unique": 192,
+      "scripted_flaps": 10,
+      "session": 2,
+      "stored_per_attempt_pct": 100.0,
+      "stored_per_scheduled_pct": 100.0,
+      "stored_unique": 192,
+      "window_end_utc": "2026-10-21T23:53:34.332000+00:00",
+      "window_source": "harness",
+      "window_start_utc": "2026-10-21T23:23:34.294000+00:00"
     }
   ]
 }
