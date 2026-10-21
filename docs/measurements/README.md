@@ -14,6 +14,11 @@ explains the artifacts and how to reproduce them.
 > **3 / 3 trials recovered, 0 messages dropped, 93 / 93 outage-scheduled messages stored
 > server-side**. Its artifacts use the `outage_*` / `telemetry_trace_outage.*` names.
 
+> **A post-mitigation re-test** (three ~30-minute sessions with a scripted alert window, after
+> the alert rate-limit and GPS/camera fixes) lives in
+> [`post_mitigation/`](post_mitigation/): method, per-session artifacts and interim results.
+> It is currently **1 of 3 sessions complete**; no combined or fleet claim is made.
+
 ## Naming
 
 The measurement tools (`tools/analyze_session.py`, `tools/export_messages.py`,

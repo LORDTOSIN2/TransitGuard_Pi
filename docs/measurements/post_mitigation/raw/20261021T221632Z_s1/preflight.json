@@ -1,0 +1,20 @@
+{
+  "buffer_count": 0,
+  "captured_utc": "2026-10-21T22:16:32Z",
+  "disk_free_mb": 579.3,
+  "mem_available_mb": 7295.5,
+  "temp_c": 75.0,
+  "temp_limit_c": 86.0,
+  "throttled_decoded": {
+    "bits_set": [
+      "under-voltage NOW",
+      "currently throttled",
+      "under-voltage has occurred",
+      "throttling has occurred"
+    ],
+    "clean": false,
+    "raw": "0x50005"
+  },
+  "throttled_hex": "0x50005",
+  "uptime_s": 1190.4
+}

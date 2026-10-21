@@ -1,0 +1,118 @@
+{
+  "combined": {
+    "accepted_http201": 190,
+    "attempted": 190,
+    "attempted_unique": 190,
+    "dropped": 0,
+    "duration_min_total": 30.0,
+    "http_acceptance_pct": 100.0,
+    "queue_high_water_max": 1,
+    "retried": 0,
+    "rtt_ms_http201": {
+      "max": 2245.8,
+      "mean": 1502.8,
+      "median": 1478.0,
+      "min": 1356.2,
+      "n": 190,
+      "p90": 1604.9,
+      "p95": 1673.0,
+      "p99": 1895.2,
+      "stdev": 105.4
+    },
+    "runs": 1,
+    "scheduled": 190,
+    "scheduled_never_attempted": 0,
+    "stored_per_attempt_pct": 100.0,
+    "stored_per_scheduled_pct": 100.0,
+    "stored_unique": 190
+  },
+  "notes": [
+    "Per-session numbers are reported separately; the combined row does not claim fleet or long-term reliability.",
+    "RTT is request->response on the Pi monotonic timer, not end-to-end.",
+    "Duplicate posts return HTTP 201 and store nothing; stored counts come from the telemetry table."
+  ],
+  "runs": [
+    {
+      "abort_reason": null,
+      "aborted": false,
+      "accepted_http201": 190,
+      "attempted": 190,
+      "attempted_unique": 190,
+      "availability": {
+        "camera_metric_present_pct": 0.0,
+        "gps_first_fix_elapsed_s": null,
+        "gps_fix_pct": 0.0,
+        "heartbeat_present_pct": 100.0,
+        "sample_count": 182
+      },
+      "buffer_high_water": 0,
+      "cadence_s": {
+        "max": 10.53,
+        "mean": 9.39,
+        "median": 10.02,
+        "min": 4.95
+      },
+      "dropped": 0,
+      "duration_min": 30.0,
+      "hotspot": "SFM MBB - CONF",
+      "http201_but_not_stored": 0,
+      "http_acceptance_pct": 100.0,
+      "manifest": {
+        "app_file_sha256": "4f06399293118f76b91ae342ffa6584d26a9e4ac0149e1d5f2bd17552dd88b29",
+        "app_git_head": "c2ad7768f8c1eae872e2f68d880a17e6c12f91f0",
+        "kernel": "6.12.93+rpt-rpi-v8",
+        "model_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+        "python": "Python 3.11.2"
+      },
+      "queue_high_water": 1,
+      "retried": 0,
+      "rows_fetched_padded": 212,
+      "rows_in_window": 190,
+      "rssi_dbm": -76,
+      "rtt_ms_all_attempts": {
+        "max": 2245.8,
+        "mean": 1502.8,
+        "median": 1478.0,
+        "min": 1356.2,
+        "n": 190,
+        "p90": 1604.9,
+        "p95": 1673.0,
+        "p99": 1895.2,
+        "stdev": 105.4
+      },
+      "rtt_ms_failures": {
+        "n": 0
+      },
+      "rtt_ms_http201": {
+        "max": 2245.8,
+        "mean": 1502.8,
+        "median": 1478.0,
+        "min": 1356.2,
+        "n": 190,
+        "p90": 1604.9,
+        "p95": 1673.0,
+        "p99": 1895.2,
+        "stdev": 105.4
+      },
+      "run_id": "20261021T221632Z_s1",
+      "safety": {
+        "post": 78.4,
+        "pre": 75.0,
+        "temp_max_sampled": 79.4,
+        "throttled_post": "0x50005",
+        "throttled_pre": "0x50005"
+      },
+      "scheduled": 190,
+      "scheduled_never_attempted": 0,
+      "scheduled_unique": 190,
+      "scripted_flaps": 10,
+      "session": 1,
+      "stored_per_attempt_pct": 100.0,
+      "stored_per_scheduled_pct": 100.0,
+      "stored_unique": 190,
+      "window_end_utc": "2026-10-21T22:46:36+00:00",
+      "window_source": "harness.log (reconstructed after the pre-fix teardown failed to restart the unit)",
+      "window_start_utc": "2026-10-21T22:16:36+00:00"
+    }
+  ]
+}

@@ -207,6 +207,8 @@ def analyze_run(run_dir):
     end_iso = dt.datetime.fromtimestamp(t_end + 120, dt.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%S+00:00")
     rows = fetch_rows(start_iso, end_iso)
+    rows_in_window = [r for r in rows
+                      if t_start <= (epoch(r["created_at"]) or 0) <= t_end]
     by_id = {r["message_id"]: r for r in rows}
     stored_ids = set(by_id)
 
@@ -303,7 +305,8 @@ def analyze_run(run_dir):
         "attempted_unique": len(distinct_attempted),
         "accepted_http201": len(ok_201),
         "stored_unique": acc_unique,
-        "rows_in_window": len(rows),
+        "rows_in_window": len(rows_in_window),
+        "rows_fetched_padded": len(rows),
         "dropped": len(drops),
         "retried": retries,
         "scheduled_never_attempted": len(never_attempted),
