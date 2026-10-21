@@ -254,6 +254,40 @@ resulting trace against Supabase. The 2026-10-16 results — **3 / 3 recovered,
 0 messages dropped, 93 / 93 outage-scheduled messages stored** — are in
 [`docs/measurements/connection_loss_report.md`](docs/measurements/connection_loss_report.md).
 
+## Post-mitigation sessions (Wi-Fi/HTTPS re-test)
+
+`tools/run_session.py` runs one measured session on the Pi: safety preflight
+(86 °C hard limit, cool-down gate, disk, SSID, clock sync, buffer), a unique
+`logs/runs/<UTC>_s<N>/` run folder, the full software/test manifest, 10 s
+sampling, a short scripted alert/state-flap window, guaranteed teardown, and
+postflight `get_throttled`/temperature readings. `tools/analyze_campaign.py`
+then reconciles each trace with Supabase and reports per-session and combined
+counts, queue high-water, cadence and RTT percentiles.
+
+```bash
+# on the Pi — one 30-minute session
+python3 tools/run_session.py --session 1 --minutes 30 \
+    --hotspot "SFM MBB - CONF" --flap-start-min 10 --flap-minutes 3
+
+# afterwards, anywhere with network access
+python tools/analyze_campaign.py /path/to/run_folder --out docs/measurements/post_mitigation
+```
+
+The flap window is driven by a **test-only** input, not by performing fatigue
+actions in front of a driver. It is off unless both variables are set, and every
+affected packet carries a `testInjection` marker:
+
+```bash
+ENABLE_TEST_STATE_INPUT=1
+TEST_STATE_INPUT_PATH=/home/john/fatigue/logs/eval_state.txt
+# file contents: NORMAL | DROWSY | CRITICAL_FATIGUE | ALCOHOL_ALERT
+```
+
+Remove both variables (and the drop-in the harness installs) after the run;
+`run_session.py` does this itself and verifies the unit no longer sees them.
+Method, artifacts and the claims this study does **not** support are documented in
+[`docs/measurements/post_mitigation/README.md`](docs/measurements/post_mitigation/README.md).
+
 ## Known gaps vs. original project objectives
 
 This implementation currently diverges from the original thesis objectives

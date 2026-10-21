@@ -236,6 +236,8 @@ BUFFER_DB_PATH              ENABLE_PREVIEW            MAX_BUFFERED_PACKETS
 PUBLISH_INTERVAL_SEC        SUPABASE_INGEST_URL       TRANSITGUARD_DEVICE_ID
 TRANSITGUARD_DEVICE_TOKEN   WIFI_SWITCH_ENABLED       WIFI_SWITCH_HOME_SSID
 WIFI_SWITCH_TARGET_PASSWORD WIFI_SWITCH_TARGET_SSID
+# evaluation-only, ABSENT unless a measurement run is in progress:
+ENABLE_TEST_STATE_INPUT     TEST_STATE_INPUT_PATH
 ```
 
 **Secrets in this file — never commit:** `TRANSITGUARD_DEVICE_TOKEN`,
@@ -286,6 +288,13 @@ Backups exist alongside it: `/etc/transitguard.env.bak-run2-*`, `.bak-run3-*`, `
   afterwards**.
 * `transitguard-repo/README.md` has a "Measuring connection stability" section describing the
   trace format, duplicate handling and clock caveats.
+* **Post-mitigation sessions.** `tools/run_session.py` runs one measured session (safety
+  preflight ≤ 86 °C + cool-down gate, unique `logs/runs/<UTC>_s<N>/` folder, manifest, 10 s
+  sampling, 3-min scripted flap window, guaranteed teardown, pre/post `get_throttled`).
+  `tools/analyze_campaign.py` reconciles the traces against Supabase and emits per-session and
+  combined counts, queue high-water, cadence and RTT percentiles. The scripted state input
+  (`ENABLE_TEST_STATE_INPUT` + `TEST_STATE_INPUT_PATH`) is test-only, off by default, and marks
+  every affected packet with `testInjection`; see `docs/measurements/post_mitigation/`.
 
 **Headline measured results (3 × ~30 min runs, 2026-10-16, SFM MBB - CONF):**
 
@@ -321,6 +330,10 @@ Backups exist alongside it: `/etc/transitguard.env.bak-run2-*`, `.bak-run3-*`, `
 5. The Pi's journal timestamps are local (`WAT`, UTC+1); Supabase timestamps are UTC.
 6. `/home/john/obsolete-prototypes-20261016_001657.tar.gz` is a safety archive of removed
    prototypes — do not delete without checking.
+7. **Live power warning (2026-10-21):** `get_throttled` reads `0x50005` — under-voltage is
+   present *now*, throttling has occurred, and the thermal soft limit has engaged. SoC idles
+   around 74 °C with the camera running. Treat long measurement runs accordingly, record the
+   readings, and do not describe a run as clean when this bitmask is non-zero.
 
 ---
 
