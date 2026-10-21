@@ -92,6 +92,8 @@ def sh(cmd, check=False, timeout=30):
                            text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
+    except FileNotFoundError:
+        return 127, "", "command not found"
     if check and p.returncode != 0:
         raise RuntimeError(f"{cmd!r} failed ({p.returncode}): {p.stderr.strip()[:300]}")
     return p.returncode, p.stdout.strip(), p.stderr.strip()
