@@ -315,6 +315,30 @@ It writes one JSON line per second (`face_present`, `frontal`, `ear`, `mar`,
 detection-accuracy claim; see
 [`docs/measurements/camera_smoke/README.md`](docs/measurements/camera_smoke/README.md).
 
+### GPS open-sky availability (one trial per power-on)
+
+The receiver has never achieved a fix in the vehicle sessions (0 % in all
+three). A separate stationary test gives it open sky and a fresh cold start on
+each power-on:
+
+```bash
+# one-time, on the Pi (installs the boot unit and arms 3 trials)
+./fatigue-env/bin/python3 tools/run_gps_trials.py --install --arm \
+    --target 3 --max-sec 180 --post-fix-sec 30
+
+# then power off/on for each trial; wait for "DONE / POWER OFF" on the LCD
+# after trial 3, pull the run folder and analyze locally:
+python tools/analyze_gps_trials.py <run_dir> --out docs/measurements/gps_open_sky
+```
+
+Each trial stops after a 30 s continuous fix (or at the 180 s cap), writes
+metrics only (no coordinates), and leaves `T<n> DONE <ttff>s / POWER OFF` on the
+16×2 LCD. The harness records the Pi boot ID and uptime per trial, so the power
+cycle is the primary cold-start evidence; a UBX cold-start command and its NMEA
+gap are recorded as a secondary control. See
+[`docs/measurements/gps_open_sky/README.md`](docs/measurements/gps_open_sky/README.md).
+Availability/TTFF only — no surveyed reference, so no position-accuracy claim.
+
 ## Known gaps vs. original project objectives
 
 This implementation currently diverges from the original thesis objectives

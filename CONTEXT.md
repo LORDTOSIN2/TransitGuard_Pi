@@ -347,6 +347,11 @@ v2.1 outage-recovery recheck was run on 2026-10-22 after these sessions:
    Since commit `c53d1e3` the app asks the module for GGA/GSA/GSV via `UBX-CFG-MSG`
    (`GPS_ENABLE_SENTENCES`), so these diagnostics are available. There is no
    `.gps_last_known.json` yet — expect it to appear when a fix is first achieved.
+   **Open-sky boot campaign (prepared 2026-10-22):** `tools/run_gps_trials.py`
+   installs a one-trial-per-power-on unit, stops `transitguard` during the test,
+   writes metrics only (no coordinates) and shows the result on the LCD; results
+   are pending, and this remains an availability/TTFF test with no surveyed
+   reference position.
 2. **USB camera fragility.** After some restarts the UVC camera fails to stream
    (`uvcvideo: Failed to set UVC probe control`), `cv2.VideoCapture` still reports *opened*, and
    `read()` always fails. Commit `c53d1e3` replaced the old tight retry loop (which pegged a core

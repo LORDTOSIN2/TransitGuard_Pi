@@ -31,6 +31,12 @@ explains the artifacts and how to reproduce them.
 > absence, ~4.4 FPS with a face present. Availability only — no accuracy claim.
 > The vehicle sessions' 0–1.1 % camera figures stand unchanged.
 
+> **A GPS open-sky availability test** (three power-on cold starts, stationary,
+> antenna in open sky) is prepared in [`gps_open_sky/`](gps_open_sky/).
+> Each power-on runs one short trial (3 min cap, stops 30 s after a fix) and
+> leaves the result on the LCD; no coordinates are stored. Availability/TTFF
+> only — no surveyed reference, so no position-accuracy claim. Results pending.
+
 ## Naming
 
 The measurement tools (`tools/analyze_session.py`, `tools/export_messages.py`,
