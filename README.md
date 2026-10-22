@@ -288,6 +288,33 @@ Remove both variables (and the drop-in the harness installs) after the run;
 Method, artifacts and the claims this study does **not** support are documented in
 [`docs/measurements/post_mitigation/README.md`](docs/measurements/post_mitigation/README.md).
 
+### Camera-pipeline availability smoke test
+
+The camera metrics recorded during the vehicle sessions were mostly unavailable
+(0 %, 1.1 %, 0 %). A separate stationary test puts a consenting person in front of
+the camera and logs **metrics only** — no frames, images or video:
+
+```bash
+# on the Pi; three announced phases: present, absent, present
+python3 tools/run_camera_smoke.py --present-sec 120 --absent-sec 60
+
+# locally
+python tools/analyze_camera_smoke.py <run_dir> --out docs/measurements/camera_smoke
+```
+
+The app-side hook is off by default and enabled only by the harness:
+
+```bash
+CAMERA_METRICS_LOG_PATH=/home/john/fatigue/logs/camera_smoke/<run>/metrics.jsonl
+```
+
+It writes one JSON line per second (`face_present`, `frontal`, `ear`, `mar`,
+`perclos`, `pitch`, `yaw`, `roll`, `driver_state`, `fps`). Result on 2026-10-22:
+96.2–99.1 % face-metric availability with a face in view, 96.5 % correct absence,
+~4.4 FPS with a face present. This is an availability check, **not** a
+detection-accuracy claim; see
+[`docs/measurements/camera_smoke/README.md`](docs/measurements/camera_smoke/README.md).
+
 ## Known gaps vs. original project objectives
 
 This implementation currently diverges from the original thesis objectives

@@ -1,0 +1,181 @@
+{
+  "analyzed_utc": "2026-10-22T10:06:55Z",
+  "claims_allowed": true,
+  "manifest": {
+    "active_ssid": "SFM MBB - CONF",
+    "app_dir": "/home/john/fatigue",
+    "app_git_dirty": true,
+    "app_head": "910de891b7cf6d6bbdedeab181ce381cbacaf955",
+    "clock_sync": "yes",
+    "config_keys": [
+      "BUFFER_DB_PATH",
+      "MAX_BUFFERED_PACKETS",
+      "PUBLISH_INTERVAL_SEC",
+      "SUPABASE_INGEST_URL",
+      "TRANSITGUARD_DEVICE_ID",
+      "TRANSITGUARD_DEVICE_TOKEN"
+    ],
+    "config_values": {
+      "BUFFER_DB_PATH": "/home/john/.transitguard_buffer.db",
+      "MAX_BUFFERED_PACKETS": "5000",
+      "PUBLISH_INTERVAL_SEC": "10.0",
+      "SUPABASE_INGEST_URL": "https://hfzqfcuezuxcgaifxqok.supabase.co/functions/v1/ingest-telemetry",
+      "TRANSITGUARD_DEVICE_ID": "BUS-101",
+      "TRANSITGUARD_DEVICE_TOKEN": "<redacted>"
+    },
+    "hostname": "john",
+    "kernel": "6.12.93+rpt-rpi-v8",
+    "label": "",
+    "metrics_only": true,
+    "model_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+    "python_version": "3.11.2",
+    "run": "20261022T110016Z",
+    "started_utc": "2026-10-22T11:00:16Z",
+    "utc_offset": "+0100",
+    "vehicle_monitor_sha256": "1ecd75dcb646decd27a6c29b55415efe317814c023c60c677bc58d8b97ef8f8f",
+    "video_retained": false
+  },
+  "media_files_retained": [],
+  "metrics_lines": 279,
+  "per_phase": {
+    "absent_1": {
+      "driver_states": {
+        "NORMAL": 57
+      },
+      "ear_available_pct": 3.5,
+      "ear_median": 0.288,
+      "face_present_pct": 3.5,
+      "fps_median": 19.21,
+      "fps_min": 3.71,
+      "frontal_pct": 3.5,
+      "mar_available_pct": 3.5,
+      "mar_median": 0.328,
+      "max_gap_sec": 1.24,
+      "perclos_available_pct": 3.5,
+      "perclos_median": 0.02,
+      "pitch_median": -4.455,
+      "roll_median": -179.03,
+      "samples": 57,
+      "yaw_median": -2.01
+    },
+    "present_1": {
+      "driver_states": {
+        "DROWSY": 3,
+        "NORMAL": 104
+      },
+      "ear_available_pct": 99.1,
+      "ear_median": 0.301,
+      "face_present_pct": 99.1,
+      "fps_median": 4.43,
+      "fps_min": 2.83,
+      "frontal_pct": 99.1,
+      "mar_available_pct": 99.1,
+      "mar_median": 0.354,
+      "max_gap_sec": 1.36,
+      "perclos_available_pct": 99.1,
+      "perclos_median": 0.032,
+      "pitch_median": -4.325,
+      "roll_median": -176.675,
+      "samples": 107,
+      "yaw_median": -2.665
+    },
+    "present_2": {
+      "driver_states": {
+        "DROWSY": 13,
+        "NORMAL": 91
+      },
+      "ear_available_pct": 96.2,
+      "ear_median": 0.323,
+      "face_present_pct": 96.2,
+      "fps_median": 4.34,
+      "fps_min": 2.88,
+      "frontal_pct": 96.2,
+      "mar_available_pct": 96.2,
+      "mar_median": 0.368,
+      "max_gap_sec": 1.35,
+      "perclos_available_pct": 96.2,
+      "perclos_median": 0.04,
+      "pitch_median": -9.58,
+      "roll_median": -175.62,
+      "samples": 104,
+      "yaw_median": -4.065
+    }
+  },
+  "phase_labels_match_observed": true,
+  "phases": [
+    {
+      "duration_sec": 120,
+      "end_epoch": 1792666960.512,
+      "end_utc": "2026-10-22T11:02:40Z",
+      "local_start": "12:00:40",
+      "name": "present_1",
+      "prompt": "STAY IN VIEW - face the camera, eyes open",
+      "start_epoch": 1792666840.512,
+      "start_utc": "2026-10-22T11:00:40Z"
+    },
+    {
+      "duration_sec": 60,
+      "end_epoch": 1792667020.581,
+      "end_utc": "2026-10-22T11:03:40Z",
+      "local_start": "12:02:40",
+      "name": "absent_1",
+      "prompt": "STEP OUT OF VIEW - leave the frame (or cover the lens)",
+      "start_epoch": 1792666960.581,
+      "start_utc": "2026-10-22T11:02:40Z"
+    },
+    {
+      "duration_sec": 120,
+      "end_epoch": 1792667140.766,
+      "end_utc": "2026-10-22T11:05:40Z",
+      "local_start": "12:03:40",
+      "name": "present_2",
+      "prompt": "RETURN TO VIEW - face the camera again",
+      "start_epoch": 1792667020.766,
+      "start_utc": "2026-10-22T11:03:40Z"
+    }
+  ],
+  "postflight": {
+    "buffer_count": 0,
+    "disk_free_mb": 578.0,
+    "finished_utc": "2026-10-22T11:05:44Z",
+    "metrics_lines": 277,
+    "service_active": "active",
+    "stop_reason": null,
+    "temp_c": 70.1,
+    "throttled": "0x50005",
+    "trace_var_present_before_teardown": true
+  },
+  "preflight": {
+    "camera_devices": [
+      "video0",
+      "video1",
+      "video10",
+      "video11",
+      "video12",
+      "video13",
+      "video14",
+      "video15",
+      "video16",
+      "video18",
+      "video19",
+      "video20",
+      "video21",
+      "video22",
+      "video23",
+      "video31"
+    ],
+    "disk_free_mb": 578.1,
+    "service_active": "active",
+    "started_utc": "2026-10-22T11:00:16Z",
+    "temp_c": 63.8,
+    "throttled": "0x50005"
+  },
+  "run": "20261022T110016Z",
+  "teardown": {
+    "cam_metrics_var_in_process": false,
+    "dropin_exists": false,
+    "service_active": "active",
+    "teardown_utc": "2026-10-22T11:06:02Z",
+    "temp_c": 68.2
+  }
+}

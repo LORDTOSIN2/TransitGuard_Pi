@@ -1,0 +1,25 @@
+{
+  "camera_devices": [
+    "video0",
+    "video1",
+    "video10",
+    "video11",
+    "video12",
+    "video13",
+    "video14",
+    "video15",
+    "video16",
+    "video18",
+    "video19",
+    "video20",
+    "video21",
+    "video22",
+    "video23",
+    "video31"
+  ],
+  "disk_free_mb": 578.1,
+  "service_active": "active",
+  "started_utc": "2026-10-22T11:00:16Z",
+  "temp_c": 63.8,
+  "throttled": "0x50005"
+}

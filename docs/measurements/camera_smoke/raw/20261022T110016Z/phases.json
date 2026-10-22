@@ -1,0 +1,34 @@
+{
+  "phases": [
+    {
+      "duration_sec": 120,
+      "end_epoch": 1792666960.512,
+      "end_utc": "2026-10-22T11:02:40Z",
+      "local_start": "12:00:40",
+      "name": "present_1",
+      "prompt": "STAY IN VIEW - face the camera, eyes open",
+      "start_epoch": 1792666840.512,
+      "start_utc": "2026-10-22T11:00:40Z"
+    },
+    {
+      "duration_sec": 60,
+      "end_epoch": 1792667020.581,
+      "end_utc": "2026-10-22T11:03:40Z",
+      "local_start": "12:02:40",
+      "name": "absent_1",
+      "prompt": "STEP OUT OF VIEW - leave the frame (or cover the lens)",
+      "start_epoch": 1792666960.581,
+      "start_utc": "2026-10-22T11:02:40Z"
+    },
+    {
+      "duration_sec": 120,
+      "end_epoch": 1792667140.766,
+      "end_utc": "2026-10-22T11:05:40Z",
+      "local_start": "12:03:40",
+      "name": "present_2",
+      "prompt": "RETURN TO VIEW - face the camera again",
+      "start_epoch": 1792667020.766,
+      "start_utc": "2026-10-22T11:03:40Z"
+    }
+  ]
+}

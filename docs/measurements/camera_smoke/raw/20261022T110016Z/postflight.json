@@ -1,0 +1,11 @@
+{
+  "buffer_count": 0,
+  "disk_free_mb": 578.0,
+  "finished_utc": "2026-10-22T11:05:44Z",
+  "metrics_lines": 277,
+  "service_active": "active",
+  "stop_reason": null,
+  "temp_c": 70.1,
+  "throttled": "0x50005",
+  "trace_var_present_before_teardown": true
+}

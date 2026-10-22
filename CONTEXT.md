@@ -289,6 +289,12 @@ Backups exist alongside it: `/etc/transitguard.env.bak-run2-*`, `.bak-run3-*`, `
   It pairs with a temporary trace drop-in
   (`/etc/systemd/system/transitguard.service.d/zz-outage-test.conf`) that **must be removed
   afterwards**.
+* **Camera-pipeline availability.** `tools/run_camera_smoke.py` runs a short, stationary,
+  consented face-present/absent test and `tools/analyze_camera_smoke.py` reconciles it. The app
+  hook (`CAMERA_METRICS_LOG_PATH`, off by default) writes **metrics only** — face presence,
+  EAR/MAR/PERCLOS, pose, classifier, FPS — and never frames or video. Result (2026-10-22):
+  96.2–99.1 % availability with a face in view, 96.5 % correct absence, ~4.4 FPS with a face
+  present — availability only, no accuracy claim; see `docs/measurements/camera_smoke/`.
 * `transitguard-repo/README.md` has a "Measuring connection stability" section describing the
   trace format, duplicate handling and clock caveats.
 * **Post-mitigation sessions.** `tools/run_session.py` runs one measured session (safety

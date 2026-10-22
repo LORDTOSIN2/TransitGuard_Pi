@@ -1,0 +1,34 @@
+{
+  "active_ssid": "SFM MBB - CONF",
+  "app_dir": "/home/john/fatigue",
+  "app_git_dirty": true,
+  "app_head": "910de891b7cf6d6bbdedeab181ce381cbacaf955",
+  "clock_sync": "yes",
+  "config_keys": [
+    "BUFFER_DB_PATH",
+    "MAX_BUFFERED_PACKETS",
+    "PUBLISH_INTERVAL_SEC",
+    "SUPABASE_INGEST_URL",
+    "TRANSITGUARD_DEVICE_ID",
+    "TRANSITGUARD_DEVICE_TOKEN"
+  ],
+  "config_values": {
+    "BUFFER_DB_PATH": "/home/john/.transitguard_buffer.db",
+    "MAX_BUFFERED_PACKETS": "5000",
+    "PUBLISH_INTERVAL_SEC": "10.0",
+    "SUPABASE_INGEST_URL": "https://hfzqfcuezuxcgaifxqok.supabase.co/functions/v1/ingest-telemetry",
+    "TRANSITGUARD_DEVICE_ID": "BUS-101",
+    "TRANSITGUARD_DEVICE_TOKEN": "<redacted>"
+  },
+  "hostname": "john",
+  "kernel": "6.12.93+rpt-rpi-v8",
+  "label": "",
+  "metrics_only": true,
+  "model_sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+  "python_version": "3.11.2",
+  "run": "20261022T110016Z",
+  "started_utc": "2026-10-22T11:00:16Z",
+  "utc_offset": "+0100",
+  "vehicle_monitor_sha256": "1ecd75dcb646decd27a6c29b55415efe317814c023c60c677bc58d8b97ef8f8f",
+  "video_retained": false
+}

@@ -1,0 +1,20 @@
+=== camera smoke 20261022T110016Z -> /home/john/fatigue/logs/camera_smoke/20261022T110016Z
+phases: present 120s, absent 60s, present 120s
+heartbeat 12:00:35 face_present=True ear=0.25402284717004264 state=NORMAL
+
+>>> PRESENT_1 from 11:00:40Z to 11:02:40Z (120s): STAY IN VIEW - face the camera, eyes open
+
+
+>>> ABSENT_1 from 11:02:40Z to 11:03:40Z (60s): STEP OUT OF VIEW - leave the frame (or cover the lens)
+
+
+>>> PRESENT_2 from 11:03:40Z to 11:05:40Z (120s): RETURN TO VIEW - face the camera again
+
+
+=== per phase
+  present_1: samples=107 face=99.1% frontal=99.1% ear_avail=99.1% fps=4.43 states={'NORMAL': 104, 'DROWSY': 3}
+  absent_1: samples=57 face=3.5% frontal=3.5% ear_avail=3.5% fps=19.21 states={'NORMAL': 57}
+  present_2: samples=104 face=96.2% frontal=96.2% ear_avail=96.2% fps=4.34 states={'NORMAL': 91, 'DROWSY': 13}
+=== labels match observed: True
+=== metrics lines: 277; teardown done: True
+=== artifacts: /home/john/fatigue/logs/camera_smoke/20261022T110016Z

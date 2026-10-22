@@ -82,6 +82,10 @@ Reported per session **and combined**:
   hotspot. Results are reported per session; combined figures are descriptive.
 * **No detection-accuracy claim.** Camera availability measures whether the
   EAR/MAR/PERCLOS/pitch signals are present at all, not whether they are correct.
+  The low in-vehicle camera availability (0–1.1 %) is unchanged; a separate
+  stationary smoke test ([`../camera_smoke/`](../camera_smoke/README.md)) shows
+  96–99 % availability with a face in view at ~4.4 FPS, but does not explain the
+  in-vehicle figures and makes no accuracy claim.
 * **No GPS-accuracy claim.** Fix availability and (if achieved) time-to-first-fix
   are reported; there is no surveyed reference position.
 * **Field effectiveness is not established** unless the mitigation is exercised

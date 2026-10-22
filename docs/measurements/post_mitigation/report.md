@@ -100,6 +100,16 @@ GPS never reported a fix in any session (`sats_used = 0`, `fix_quality = 0`), so
 produced all four metrics for two consecutive samples (23:28:14–23:28:24 UTC)
 while classifying `DROWSY`, then went unavailable again.
 
+These in-vehicle figures are **unchanged**. A separate stationary smoke test on
+2026-10-22 ([`../camera_smoke/`](../camera_smoke/README.md)) put a consenting
+operator in front of the same camera (gated metrics-logging build `1ecd75dcb646…`,
+off by default): with a face in view the pipeline produced valid face metrics for
+**96.2–99.1 %** of seconds, and reported no face for **96.5 %** of the
+face-absent phase, at **~4.4 FPS with a face present**. That shows the live camera
+path works when a face is visible; it does **not** explain the 0–1.1 % campaign
+values (face not in view, lighting, mounting or distance could each contribute),
+and those campaign measurements stand as recorded.
+
 These are **availability** observations. No detection-accuracy claim is made:
 there is no reference measurement of the driver's actual eye/mouth state, and no
 surveyed GPS reference position.
@@ -147,7 +157,7 @@ that cause.
 | Delivery/queue reconciliation + RTT stats, per run and combined | **Done** — tables above; machine-readable in `campaign_summary.json` |
 | Trace-verified outage recovery from v2.1 | **Done** — 3/3 trials recovered, 0 dropped, 92/92 stored; see below |
 | GPS fix availability and time-to-first-fix, no accuracy claim | **Done** — 0 % availability, no fix, no TTFF |
-| Camera-pipeline signal availability, no accuracy claim | **Done** — 0 %, 1.1 %, 0 % |
+| Camera-pipeline signal availability, no accuracy claim | **Done** — campaign 0 %, 1.1 %, 0 %; separate face-present smoke test 96.2–99.1 %, no accuracy claim |
 | Software/test manifest + safety pre/post readings | **Done** — per-session `manifest.json`, `preflight.json`, `postflight.json`, summarised above |
 
 ## Measurement notes

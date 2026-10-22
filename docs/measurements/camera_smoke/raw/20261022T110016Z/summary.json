@@ -1,0 +1,76 @@
+{
+  "metrics_lines": 277,
+  "phase_labels_match_observed": true,
+  "phases": {
+    "absent_1": {
+      "driver_states": {
+        "NORMAL": 57
+      },
+      "ear_available_pct": 3.5,
+      "ear_median": 0.288,
+      "face_present_pct": 3.5,
+      "fps_median": 19.21,
+      "fps_min": 3.71,
+      "frontal_pct": 3.5,
+      "mar_available_pct": 3.5,
+      "mar_median": 0.328,
+      "perclos_available_pct": 3.5,
+      "perclos_median": 0.02,
+      "samples": 57
+    },
+    "present_1": {
+      "driver_states": {
+        "DROWSY": 3,
+        "NORMAL": 104
+      },
+      "ear_available_pct": 99.1,
+      "ear_median": 0.301,
+      "face_present_pct": 99.1,
+      "fps_median": 4.43,
+      "fps_min": 2.83,
+      "frontal_pct": 99.1,
+      "mar_available_pct": 99.1,
+      "mar_median": 0.354,
+      "perclos_available_pct": 99.1,
+      "perclos_median": 0.032,
+      "samples": 107
+    },
+    "present_2": {
+      "driver_states": {
+        "DROWSY": 13,
+        "NORMAL": 91
+      },
+      "ear_available_pct": 96.2,
+      "ear_median": 0.323,
+      "face_present_pct": 96.2,
+      "fps_median": 4.34,
+      "fps_min": 2.88,
+      "frontal_pct": 96.2,
+      "mar_available_pct": 96.2,
+      "mar_median": 0.368,
+      "perclos_available_pct": 96.2,
+      "perclos_median": 0.04,
+      "samples": 104
+    }
+  },
+  "run": "20261022T110016Z",
+  "teardown_done": true,
+  "totals": {
+    "driver_states": {
+      "DROWSY": 17,
+      "NORMAL": 260
+    },
+    "ear_available_pct": 78.0,
+    "ear_median": 0.312,
+    "face_present_pct": 78.0,
+    "fps_median": 4.43,
+    "fps_min": 0.97,
+    "frontal_pct": 78.0,
+    "mar_available_pct": 78.0,
+    "mar_median": 0.363,
+    "perclos_available_pct": 78.0,
+    "perclos_median": 0.035,
+    "samples": 277
+  },
+  "video_retained": false
+}

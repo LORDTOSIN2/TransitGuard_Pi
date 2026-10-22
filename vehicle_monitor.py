@@ -351,6 +351,46 @@ def read_test_state():
     return _test_state_cache["value"]
 
 
+# --- Optional camera-pipeline metrics log (availability evaluation) --------
+# When CAMERA_METRICS_LOG_PATH is set, append one JSON line per second with the
+# detection outcome: face present, frontal, EAR/MAR/PERCLOS, head pose, the
+# classifier output and the measured frame rate. Metrics only - no image or
+# video data is ever written. Empty path = disabled (default), so normal runs
+# are unaffected.
+CAMERA_METRICS_LOG_PATH = os.environ.get("CAMERA_METRICS_LOG_PATH", "").strip()
+_camera_metrics_lock = threading.Lock()
+
+
+def log_camera_metrics(face_present, frontal, ear, mar, perclos, pitch, yaw, roll,
+                       driver_state, frames, fps):
+    """Append one metrics-only JSON line. No-op when the log is not configured."""
+    if not CAMERA_METRICS_LOG_PATH:
+        return
+    record = {
+        "wall_utc": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
+        "wall_epoch": round(time.time(), 3),
+        "mono_ms": int(time.monotonic() * 1000),
+        "face_present": bool(face_present),
+        "frontal": bool(frontal),
+        "ear": round(ear, 4) if ear is not None else None,
+        "mar": round(mar, 4) if mar is not None else None,
+        "perclos": round(perclos, 4) if perclos is not None else None,
+        "pitch": round(pitch, 2) if pitch is not None else None,
+        "yaw": round(yaw, 2) if yaw is not None else None,
+        "roll": round(roll, 2) if roll is not None else None,
+        "driver_state": driver_state,
+        "frames_processed": int(frames),
+        "fps": round(fps, 2) if fps is not None else None,
+    }
+    try:
+        line = json.dumps(record, separators=(",", ":"))
+        with _camera_metrics_lock:
+            with open(CAMERA_METRICS_LOG_PATH, "a") as fh:
+                fh.write(line + "\n")
+    except Exception:
+        pass
+
+
 if not DEVICE_TOKEN:
     print("WARNING: TRANSITGUARD_DEVICE_TOKEN is not set. Every upload will "
           "fail with 401 Unauthorized until you set it (see the integration "
@@ -2806,12 +2846,15 @@ def main():
     start_time = time.time()
     last_log_time = 0
     LOG_INTERVAL_SEC = 1
+    last_cam_log_mono = time.monotonic()
+    cam_frames = 0
 
     while not stop_event.is_set():
         ret, frame = cam.read()
         if not ret:
             time.sleep(0.01)  # camera thread hasn't produced a frame yet
             continue
+        cam_frames += 1
 
         h, w, _ = frame.shape
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -2822,11 +2865,14 @@ def main():
 
         status_text = "No face detected"
         avg_ear = mar = perclos = pitch = yaw = roll = None
+        face_present = False
+        is_frontal = False
 
         location = get_current_location()
         alcohol = get_current_alcohol()
 
         if result.face_landmarks:
+            face_present = True
             landmarks = result.face_landmarks[0]
 
             # Compute head pose FIRST — EAR/MAR are only geometrically valid
@@ -2835,7 +2881,7 @@ def main():
             # even with eyes wide open. So we check pose before trusting them.
             pitch, yaw, roll = get_head_pose(landmarks, w, h)
 
-            is_frontal = (
+            is_frontal = bool(
                 yaw is not None
                 and abs(yaw) <= FACE_YAW_LIMIT_FOR_EAR
                 and abs(pitch) <= FACE_PITCH_LIMIT_FOR_EAR
@@ -2984,12 +3030,29 @@ def main():
                       alcohol, sent, buffer_count())
             last_log_time = time.time()
 
+        # --- Camera-pipeline metrics log (availability runs only) ---
+        if CAMERA_METRICS_LOG_PATH:
+            now_mono = time.monotonic()
+            if now_mono - last_cam_log_mono >= 1.0:
+                elapsed = max(now_mono - last_cam_log_mono, 1e-6)
+                log_camera_metrics(
+                    face_present=face_present, frontal=is_frontal,
+                    ear=avg_ear, mar=mar, perclos=perclos,
+                    pitch=pitch, yaw=yaw, roll=roll,
+                    driver_state=driver_state,
+                    frames=cam_frames,
+                    fps=cam_frames / elapsed,
+                )
+                last_cam_log_mono = now_mono
+                cam_frames = 0
+
         # --- Live browser dashboard (video feed + metrics, non-blocking) ---
         if ENABLE_DASHBOARD:
             update_dashboard_frame(frame)
             update_dashboard_metrics(
                 driver_state=driver_state,
                 ear=avg_ear, mar=mar, perclos=perclos, pitch=pitch,
+                face_present=face_present, frontal=is_frontal,
                 latitude=location["latitude"], longitude=location["longitude"],
                 fix_valid=location["fix_valid"],
                 using_last_known=location.get("using_last_known", False),

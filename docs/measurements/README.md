@@ -25,6 +25,12 @@ explains the artifacts and how to reproduce them.
 > fleet or long-term reliability claim. The v2.1 outage recheck was run
 > separately (see above).
 
+> **A camera-pipeline availability smoke test** (face present / absent / present,
+> metrics only, no video) is in [`camera_smoke/`](camera_smoke/):
+> **96.2–99.1 % face-metric availability with a face in view**, 96.5 % correct
+> absence, ~4.4 FPS with a face present. Availability only — no accuracy claim.
+> The vehicle sessions' 0–1.1 % camera figures stand unchanged.
+
 ## Naming
 
 The measurement tools (`tools/analyze_session.py`, `tools/export_messages.py`,
