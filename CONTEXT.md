@@ -138,6 +138,11 @@ ssh john@10.80.3.194 "echo $b64 | base64 -d | bash"
 **If the address changes:** `10.80.3.194` belongs to the SFM hotspot subnet. Switch networks
 (§5) and the address changes; also check the LCD, which shows the IP on boot.
 
+**Current DHCP address (2026-10-22/23):** the Pi was on the **Redmi 14C** hotspot at
+`10.159.123.212` (MAC `e4:5f:01:0b:b7:ce`). The host key is the same Pi; after a
+power cycle find the address with `arp -a | findstr e4-5f-01` and connect with
+`ssh -o StrictHostKeyChecking=accept-new john@<ip>`.
+
 ---
 
 ## 5. Wi-Fi / hotspot switching (Redmi 14C ⇄ SFM MBB - CONF)
