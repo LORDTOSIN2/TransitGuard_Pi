@@ -8,6 +8,11 @@
 **Result:** **3 / 3 trials recovered · 0 messages dropped · 93 / 93 outage-scheduled messages
 stored server-side · 0 cut leaks**
 
+**Recheck 2026-10-22 — `v2.1` run end-to-end:** **3 / 3 recovered · 0 dropped · 92 / 92
+outage-scheduled IDs stored · 0 cut leaks**, and the harness's own (`v2.1`) verdict now agrees
+with the independent reconciliation in all three trials. Details and raw artifacts:
+[`outage_recheck_v21/`](outage_recheck_v21/README.md) (§9).
+
 > Companion to [`stability_report.md`](stability_report.md), which characterises the *healthy*
 > path. This report characterises what happens when that path **disappears for 5 minutes** and
 > then returns.
@@ -229,10 +234,11 @@ completed it.
 2. **Synthetic outage shape.** A blackhole drops packets silently. A real outage could also
    involve re-DHCP, NAT changes or DNS failure. Only the ingest host was blackholed; DNS and the
    LAN stayed up, so DNS-failure paths were not exercised.
-3. **Recovery verdict is trace-derived for this run.** The harness's own verdict expression was
-   wrong (§3.2); verdicts here come from `tools/analyze_outage.py`. The committed harness (`v2.1`)
-   fixes the expression but has **not** itself been run end-to-end — the correction is a strict
-   widening of the same test over the same events.
+3. **Original verdicts were trace-derived.** The 2026-10-16 run used the v2 harness, whose verdict
+   expression was wrong (§3.2), so its verdicts come from `tools/analyze_outage.py`. The fixed
+   harness (**v2.1**) was subsequently run **end-to-end on 2026-10-22** (§9): all three trials
+   were labelled `CONFIRMED` by the harness itself and independently confirmed, so the correction
+   is validated and not merely a re-derivation.
 4. **Load.** ~1 message / 10 s plus the alert path; a higher rate would change drain times
    (the uploader replays ≤ 15 packets per cycle).
 5. **LoRa not measured.** The fallback fired (journal) but is out of scope (no internet path).
@@ -270,3 +276,51 @@ python tools/analyze_outage.py outage_poll.csv outage_summary.txt telemetry_trac
 **Teardown (required):** remove the drop-in, `daemon-reload`, restart `transitguard`, and confirm
 `TELEMETRY_TRACE_PATH` is gone from the process environment — tracing grows ~5.8 MB/day and the
 Pi's disk runs ~91 % full. (Done after this run; the drop-in was removed at 14:20:37.)
+
+---
+
+## 9. Recheck, 2026-10-22 — `v2.1` end-to-end
+
+The 2026-10-16 run exercised the v2 harness; its verdicts had to be re-derived from the trace
+(§3.2). This recheck runs the corrected **v2.1** harness unchanged, so the verdict expression is
+tested rather than assumed.
+
+**Conditions:** same device and hotspot (`SFM MBB - CONF`), stationary, app `910de89`
+(`vehicle_monitor.py` SHA-256 `4f0639929311…`, identical to the post-mitigation sessions), config
+`288bd62f…`, ingest host `hfzqfcuezuxcgaifxqok.supabase.co` → `104.18.38.10`, `172.64.149.246`.
+Three 300 s blackholes with 5 s polling, ≤180 s observation, 480 s deadman. Preflight 58.4 °C,
+579 MB free, 0 leftover blackhole routes; postflight 74.0 °C, 0 routes, drop-in removed and
+`TELEMETRY_TRACE_PATH` verified absent from the process environment.
+
+| | Trial 1 | Trial 2 | Trial 3 | **Total** |
+|---|---|---|---|---|
+| Cut verified (`000` + routes ≥ 1) | ✅ | ✅ | ✅ | 3 / 3 |
+| Restore verified (probe ≠ `000`, routes = 0) | ✅ | ✅ | ✅ | 3 / 3 |
+| Buffer peak → at restore | 30 → 30 | 29 → 29 | 30 → 30 | 89 |
+| Scheduled during outage | 31 | 30 | 31 | **92** |
+| Stored server-side (unique) | **31 / 31** | **30 / 30** | **31 / 31** | **92 / 92** |
+| Dropped | **0** | **0** | **0** | **0** |
+| Time to first 201 | +8 s | +6 s | +4 s | — |
+| Time to first **live** 201 | +33 s | +32 s | +27 s | — |
+| Time to buffer = 0 | +65 s | +65 s | +53 s | — |
+| Live 201s after clearance | 1 | 5 | 5 | 11 |
+| Temp range | 60–68 °C | 68–72 °C | 71–74 °C | — |
+| **Harness verdict (v2.1)** | **CONFIRMED** | **CONFIRMED** | **CONFIRMED** | **3 / 3** |
+| **Independent verdict** | **CONFIRMED** | **CONFIRMED** | **CONFIRMED** | **3 / 3** |
+
+* **92 / 92** outage-scheduled unique IDs are present in `public.telemetry`; **0** drops and
+  **0** cut leaks (`outage_leaks.txt` empty).
+* 91 of the 92 were confirmed replayed from the buffer; the remaining one was stored by a live
+  attempt after restore. All 92 are accounted for server-side, which is the claim that matters.
+* The buffer drained in **53–65 s** — faster than the 89–123 s of the 2026-10-16 run at similar
+  backlog and the same 10 s cadence. Do not read this as a speed-up: the two runs differ in
+  under-voltage state and link conditions, so the drain times are not directly comparable.
+* `get_throttled` stayed `0x50005` (under-voltage, throttled) throughout. This is a confounder for
+  timing, not for the delivery count.
+
+**Still not tested:** Wi-Fi association/hotspot, DNS and DHCP recovery. The cut was a route
+blackhole over a healthy link, so those paths were never exercised — the same caveat as §7.2
+applies to this recheck.
+
+Artifacts: [`outage_recheck_v21/`](outage_recheck_v21/README.md) — poll CSV, harness summary,
+leaks file, raw trace (`dropped=0`), `outage_summary.json`, run log.

@@ -7,7 +7,8 @@ non-claims are in [`README.md`](README.md); generated tables are in
 The mitigation under test is the alert-publish rate limit (`46077a2`) plus the
 GPS/camera busy-spin fix (`c53d1e3`), re-measured on the upload path
 (Pi → Edge Function → Postgres). No ingest outage was induced in these sessions;
-the separate recovery recheck was **not** run (see *Not completed*).
+the separate v2.1 recovery recheck was run afterwards and is reported under
+*Outage-recovery recheck* below.
 
 ## What was tested
 
@@ -144,7 +145,7 @@ that cause.
 | Requested result | Status |
 |---|---|
 | Delivery/queue reconciliation + RTT stats, per run and combined | **Done** — tables above; machine-readable in `campaign_summary.json` |
-| Trace-verified outage recovery from v2.1 | **Not completed** — limitation retained; see below |
+| Trace-verified outage recovery from v2.1 | **Done** — 3/3 trials recovered, 0 dropped, 92/92 stored; see below |
 | GPS fix availability and time-to-first-fix, no accuracy claim | **Done** — 0 % availability, no fix, no TTFF |
 | Camera-pipeline signal availability, no accuracy claim | **Done** — 0 %, 1.1 %, 0 % |
 | Software/test manifest + safety pre/post readings | **Done** — per-session `manifest.json`, `preflight.json`, `postflight.json`, summarised above |
@@ -169,15 +170,48 @@ that cause.
   pre-write frame at 23:33:32 UTC was `NORMAL` with no marker. The trace also
   records `test_injected_state`.
 
-## Not completed
+## Outage-recovery recheck (v2.1, 2026-10-22)
 
-* **v2.1 outage-recovery recheck.** The fixed script
-  (`tools/run_outage_trials.sh`, v2.1 verdict expression) is deployed and matches
-  the repository, but the 3 × 5 min trials were not re-run in this campaign. The
-  previous result — 3/3 recovered, 0 dropped, 93/93 stored, buffer drained in
-  89–123 s — is therefore **not** re-verified here, and no post-mitigation
-  recovery claim is made. Running it requires archiving the 2026-10-16
-  canonical files on the Pi first.
+Run separately from the three sessions, after they finished and the Pi had cooled
+(58.4 °C at start). The fixed **v2.1** harness was exercised end-to-end rather
+than only being deployed, which the 2026-10-16 study could not do because its
+verdict expression was wrong.
+
+Three 300 s ingest-scoped blackholes on the same hotspot, 5 s polling, ≤180 s
+observation. LAN, SSH and the dashboard stayed up; only the Supabase route was
+blocked.
+
+| | Trial 1 | Trial 2 | Trial 3 | **Total** |
+|---|---|---|---|---|
+| Cut / restore verified | ✅ / ✅ | ✅ / ✅ | ✅ / ✅ | 3 / 3 |
+| Buffer peak → at restore | 30 → 30 | 29 → 29 | 30 → 30 | 89 |
+| Scheduled during outage | 31 | 30 | 31 | **92** |
+| Stored server-side (unique) | **31 / 31** | **30 / 30** | **31 / 31** | **92 / 92** |
+| Dropped | 0 | 0 | 0 | **0** |
+| First **live** 201 after restore | +33 s | +32 s | +27 s | — |
+| Buffer back to 0 | +65 s | +65 s | +53 s | — |
+| Harness / independent verdict | CONFIRMED | CONFIRMED | CONFIRMED | **3 / 3** |
+
+* **92 / 92** outage-scheduled unique IDs stored, **0** dropped, **0** cut leaks.
+  91 were confirmed replayed from the buffer; the 92nd was stored by a live
+  attempt — all 92 are accounted for server-side.
+* The buffer emptied within **53–65 s**, with live 201s after clearance in every
+  trial. Faster than the 2026-10-16 drain (89–123 s), but the runs differ in
+  under-voltage state and link conditions, so this is not a claimed speed-up.
+* Harness and the trace↔Supabase reconciler agree on all three trials, confirming
+  the v2.1 verdict fix behaves as intended.
+* Safety: 58.4 → 74.0 °C, `get_throttled 0x50005` throughout (under-voltage,
+  so still not a clean-power run), 579 MB free, all blackhole routes removed and
+  the trace drop-in removed with the process environment verified clear.
+
+**Caveat, unchanged:** this does **not** test Wi-Fi association, hotspot, DNS or
+DHCP recovery. The cut was a route blackhole over a healthy link. As with the
+2026-10-16 study, a real outage that involves re-association or DNS failure is
+still untested.
+
+Artifacts: [`../outage_recheck_v21/`](../outage_recheck_v21/README.md) (poll CSV,
+harness summary, empty leaks file, raw trace, `outage_summary.json`, run log);
+full write-up in [`../connection_loss_report.md`](../connection_loss_report.md) §9.
 
 ## Reproduce
 

@@ -13,13 +13,17 @@ explains the artifacts and how to reproduce them.
 > hotspot — is in [`connection_loss_report.md`](connection_loss_report.md):
 > **3 / 3 trials recovered, 0 messages dropped, 93 / 93 outage-scheduled messages stored
 > server-side**. Its artifacts use the `outage_*` / `telemetry_trace_outage.*` names.
+> A **v2.1 recheck on 2026-10-22** (harness run end-to-end) reproduced this: 3 / 3 recovered,
+> 0 dropped, **92 / 92** stored, 0 cut leaks —
+> [`outage_recheck_v21/`](outage_recheck_v21/README.md).
 
 > **A post-mitigation re-test** (three ~30-minute sessions with a scripted alert window, after
 > the alert rate-limit and GPS/camera fixes) lives in
 > [`post_mitigation/`](post_mitigation/): method, per-session artifacts and results.
 > Combined: **571 / 571 scheduled messages stored, 0 dropped, 0 retried, queue high-water 1**,
 > RTT median 1.53 s / p95 1.91 s / max 6.85 s. Three stationary runs on one hotspot — not a
-> fleet or long-term reliability claim, and the v2.1 outage recheck was not re-run.
+> fleet or long-term reliability claim. The v2.1 outage recheck was run
+> separately (see above).
 
 ## Naming
 

@@ -283,6 +283,9 @@ Backups exist alongside it: `/etc/transitguard.env.bak-run2-*`, `.bak-run3-*`, `
   using `tools/analyze_outage.py` to reconcile the trace against Supabase. Results (2026-10-16):
   **3 / 3 recovered, 0 dropped, 93 / 93 outage-scheduled messages stored**, buffer → 0 in
   89–123 s — see [`docs/measurements/connection_loss_report.md`](docs/measurements/connection_loss_report.md).
+  Recheck (2026-10-22, **v2.1 run end-to-end**): **3 / 3 recovered, 0 dropped, 92 / 92 stored**,
+  buffer → 0 in 53–65 s, harness verdict agrees with the independent reconciler —
+  [`docs/measurements/outage_recheck_v21/`](docs/measurements/outage_recheck_v21/README.md).
   It pairs with a temporary trace drop-in
   (`/etc/systemd/system/transitguard.service.d/zz-outage-test.conf`) that **must be removed
   afterwards**.
@@ -324,8 +327,9 @@ Backups exist alongside it: `/etc/transitguard.env.bak-run2-*`, `.bak-run3-*`, `
 
 Details, per-session tables and the raw artifacts are in
 [`docs/measurements/post_mitigation/`](docs/measurements/post_mitigation/). The
-v2.1 outage-recovery recheck was **not** re-run, so the 2026-10-16 recovery
-figures remain the only trace-verified recovery evidence.
+v2.1 outage-recovery recheck was run on 2026-10-22 after these sessions:
+**3 / 3 trials recovered, 0 dropped, 92 / 92 stored, 0 cut leaks** — see
+[`docs/measurements/outage_recheck_v21/`](docs/measurements/outage_recheck_v21/README.md).
 
 ---
 
