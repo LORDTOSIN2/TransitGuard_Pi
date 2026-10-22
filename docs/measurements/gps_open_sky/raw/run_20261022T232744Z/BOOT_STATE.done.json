@@ -1,0 +1,37 @@
+{
+  "armed": false,
+  "armed_utc": "2026-10-22T23:27:44Z",
+  "boot_delay": 20,
+  "completed_utc": "2026-10-23T00:21:05Z",
+  "max_sec": 180,
+  "next_trial": 4,
+  "post_fix_sec": 30,
+  "run_dir": "/home/john/fatigue/logs/gps_trials/run_20261022T232744Z",
+  "target": 3,
+  "trials": [
+    {
+      "boot_id": "dc2abd39-486a-40d9-9569-1ba2820f7855",
+      "complete": true,
+      "fix_valid_fraction": 0.257,
+      "system_utc": "2026-10-23T00:08:42Z",
+      "trial": 1,
+      "ttff_s": 88.39
+    },
+    {
+      "boot_id": "3715d0b1-1f2a-42e6-bfda-f4a88f1bed1d",
+      "complete": true,
+      "fix_valid_fraction": 0.168,
+      "system_utc": "2026-10-23T00:13:15Z",
+      "trial": 2,
+      "ttff_s": 147.22
+    },
+    {
+      "boot_id": "13306e89-618c-41d6-8742-7acd48225c20",
+      "complete": true,
+      "fix_valid_fraction": 0.0,
+      "system_utc": "2026-10-23T00:18:06Z",
+      "trial": 3,
+      "ttff_s": null
+    }
+  ]
+}

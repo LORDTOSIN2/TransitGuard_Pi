@@ -31,13 +31,15 @@ explains the artifacts and how to reproduce them.
 > absence, ~4.4 FPS with a face present. Availability only — no accuracy claim.
 > The vehicle sessions' 0–1.1 % camera figures stand unchanged.
 
-> **A GPS open-sky availability test** (three power-on cold starts, stationary,
-> antenna in open sky) is prepared in [`gps_open_sky/`](gps_open_sky/).
-> Each power-on runs one short trial (3 min cap, stops 30 s after a fix) and
-> leaves the result on the LCD; no coordinates are stored. Availability/TTFF
-> only — no surveyed reference, so no position-accuracy claim. A 60 s indoor
-> pilot saw a healthy NMEA stream (416 lines) but 0–2 satellites and no fix;
-> it is not part of the three-trial result. Open-sky power cycles pending.
+> **A GPS power-cycle availability test** (three power-on starts, stationary,
+> antenna placed for sky view) is in [`gps_open_sky/`](gps_open_sky/):
+> each power-on ran one short trial (180 s cap, 30 s after a fix), metrics only,
+> no coordinates. **2 / 3 trials fixed** (power-on TTFF 145.0 s and 211.3 s);
+> trial 3 timed out. When fixed, the 30 s hold was 100 % valid, but only **4
+> satellites** were used (HDOP 7.1–8.1), so this was a **marginal sky view**, not
+> a clean open-sky benchmark. UBX reset was not acknowledged, so these are
+> power-cycle starts, not verified cold starts. Availability/TTFF only - no
+> surveyed reference, so no position-accuracy claim.
 
 ## Naming
 

@@ -95,8 +95,9 @@ This is **not** end-to-end delay; it excludes queue wait and clock skew.
 | GPS time-to-first-fix | not achieved | not achieved | not achieved |
 | Camera metric present (`ear`/`mar`/`perclos`/`pitch`) | 0.0 % | 1.1 % | 0.0 % |
 
-GPS never reported a fix in any session (`sats_used = 0`, `fix_quality = 0`), so
-**no time-to-first-fix exists** for this campaign. In run 2 the camera pipeline
+GPS never reported a fix in any of these three in-vehicle sessions
+(`sats_used = 0`, `fix_quality = 0`), so **no time-to-first-fix exists** for this
+campaign. In run 2 the camera pipeline
 produced all four metrics for two consecutive samples (23:28:14–23:28:24 UTC)
 while classifying `DROWSY`, then went unavailable again.
 
@@ -113,6 +114,17 @@ and those campaign measurements stand as recorded.
 These are **availability** observations. No detection-accuracy claim is made:
 there is no reference measurement of the driver's actual eye/mouth state, and no
 surveyed GPS reference position.
+
+A separate stationary GPS power-cycle test was run on 2026-10-23
+([`../gps_open_sky/`](../gps_open_sky/README.md)): three full Pi power cycles,
+antenna placed for sky view, metrics only, 180 s cap. **2 / 3 trials fixed**
+(derived power-on TTFF 145.0 s and 211.3 s); trial 3 timed out. When fixed, the
+30 s post-fix hold was 100 % valid (58 / 58), but only **4 satellites** were used
+(HDOP 7.1–8.1) and the whole-window fix-valid fraction was 12.7 % (58 / 456).
+This is a **marginal, placement-limited** result, not a clean open-sky benchmark;
+it does not change the in-vehicle 0 % figures above. The receiver did not
+acknowledge `UBX-MON-VER`/`UBX-CFG-RST`, so these are power-cycle starts, not
+verified cold starts, and under-voltage/throttling (`0x50005`) was present.
 
 ## Safety readings — before and after each session
 
@@ -156,7 +168,7 @@ that cause.
 |---|---|
 | Delivery/queue reconciliation + RTT stats, per run and combined | **Done** — tables above; machine-readable in `campaign_summary.json` |
 | Trace-verified outage recovery from v2.1 | **Done** — 3/3 trials recovered, 0 dropped, 92/92 stored; see below |
-| GPS fix availability and time-to-first-fix, no accuracy claim | **Done** — 0 % availability, no fix, no TTFF |
+| GPS fix availability and time-to-first-fix, no accuracy claim | **Done** — in-vehicle 0 % (no TTFF); separate stationary power-cycle test 2/3 fixed, power-on TTFF 145 / 211 s, 4 sats, HDOP 7.1–8.1 (marginal sky view) |
 | Camera-pipeline signal availability, no accuracy claim | **Done** — campaign 0 %, 1.1 %, 0 %; separate face-present smoke test 96.2–99.1 %, no accuracy claim |
 | Software/test manifest + safety pre/post readings | **Done** — per-session `manifest.json`, `preflight.json`, `postflight.json`, summarised above |
 

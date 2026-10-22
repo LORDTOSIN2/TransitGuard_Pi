@@ -317,9 +317,15 @@ detection-accuracy claim; see
 
 ### GPS open-sky availability (one trial per power-on)
 
-The receiver has never achieved a fix in the vehicle sessions (0 % in all
-three). A separate stationary test gives it open sky and a fresh cold start on
-each power-on:
+The receiver never achieved a fix in the in-vehicle sessions (0 % in all three).
+A separate stationary power-cycle test was run on 2026-10-23: **2 / 3 power-on
+trials fixed**, with derived power-on TTFF of **145.0 s and 211.3 s**; trial 3
+timed out at 180 s. When fixed, the 30 s hold was 100 % valid (58 / 58), but only
+**4 satellites** were used (HDOP 7.1–8.1), so this was a **marginal sky view**,
+not a clean open-sky benchmark. The receiver did not acknowledge UBX, so these
+are power-cycle starts, not verified receiver cold starts.
+
+The harness is installed; each power-on runs one trial:
 
 ```bash
 # one-time, on the Pi (installs the boot unit and arms 3 trials)
@@ -333,9 +339,8 @@ python tools/analyze_gps_trials.py <run_dir> --out docs/measurements/gps_open_sk
 
 Each trial stops after a 30 s continuous fix (or at the 180 s cap), writes
 metrics only (no coordinates), and leaves `T<n> DONE <ttff>s / POWER OFF` on the
-16×2 LCD. The harness records the Pi boot ID and uptime per trial, so the power
-cycle is the primary cold-start evidence; a UBX cold-start command and its NMEA
-gap are recorded as a secondary control. See
+16×2 LCD. The harness records the Pi boot ID, uptime and `get_throttled` per
+trial. See
 [`docs/measurements/gps_open_sky/README.md`](docs/measurements/gps_open_sky/README.md).
 Availability/TTFF only — no surveyed reference, so no position-accuracy claim.
 

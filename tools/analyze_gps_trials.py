@@ -20,7 +20,6 @@ Usage:
 """
 import argparse
 import csv
-import datetime as dt
 import json
 import os
 import statistics as stats
@@ -222,7 +221,9 @@ def main():
 
     out = {
         "run": os.path.basename(os.path.normpath(run)),
-        "analyzed_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "campaign_finished_utc": (run_summary.get("finished_utc")
+                                  or run_summary.get("updated_utc")),
+        "analysis_note": "trial timestamps come from the Pi; no host-clock timestamp is used",
         "manifest": manifest,
         "run_summary": run_summary,
         "trials": trials,

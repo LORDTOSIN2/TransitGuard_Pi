@@ -1,15 +1,19 @@
-# GPS open-sky availability — method and artifacts
+# GPS open-sky availability — method, artifacts and results
 
-**Question:** after a cold start, can the NEO-6M acquire a valid GPS fix and hold
-it while the receiver is stationary with a clear view of the sky?
+**Question:** after a power-cycle start, can the NEO-6M acquire a valid GPS fix
+and hold it while the receiver is stationary with a clear view of the sky?
 
 **Claim scope:** fix availability and time-to-first-fix (TTFF) only. There is no
 surveyed reference position here, so this study makes **no position-accuracy
 claim**. It is also not a moving-vehicle, fleet, or long-term reliability test.
 
-> **Status:** the harness and boot unit are installed and armed; the three
-> power-on open-sky trials are pending. A short pilot probe is reported below.
-> Results will be added after the Pi is power-cycled three times in open sky.
+> **Status (completed 2026-10-23):** all three power-on trials completed, with
+> three distinct boot IDs. **2 / 3 acquired a fix**; trial 3 timed out at 180 s.
+> TTFF was long (derived power-on TTFF 145.0 s and 211.3 s), and only **4
+> satellites** were used (HDOP 7.1–8.1). When a fix was present it held for the
+> full 30 s post-fix window (58 / 58 samples), but the low satellite count and
+> long TTFF indicate a **marginal sky view**, not a strong open-sky benchmark.
+> See [Results](#results--run_20261022t232744z) and the caveats below.
 
 ## Pilot probe (not one of the three trials)
 
@@ -19,9 +23,9 @@ A 60 s probe was run on 2026-10-22T23:24:59Z while the Pi was indoors:
 - **No fix**: `sats_in_view` 0–2, best C/N0 34 dBHz, `sats_used` 0.
 - `UBX-MON-VER` got no response and the NMEA gap after `UBX-CFG-RST` was
   0.1 s: this receiver/clone did not acknowledge UBX, so the software cold
-  start was **not observed**. The power-cycle cold start is therefore the
-  primary evidence in this campaign; the UBX command is only a secondary
-  control.
+  start was **not observed**. The power cycle is therefore the primary start
+  control, but it is **not a verified receiver cold start**; the UBX command is
+  only a secondary control.
 - Temperature 69.6–72.5 °C; `get_throttled 0x50005`.
 
 This is consistent with an obstructed sky view, not a dead UART: the serial
@@ -29,13 +33,69 @@ path and NMEA parser work. Raw pilot files are in
 [`raw/pilot_20261022T232459Z/`](raw/pilot_20261022T232459Z/). They are **not**
 included in the three-trial availability result.
 
+## Results — run_20261022T232744Z
+
+**Setup:** armed 2026-10-22T23:27:44Z; trials started 2026-10-23T00:08:42Z,
+00:13:15Z and 00:18:06Z (UTC). One trial per full Pi power cycle, stationary,
+app stopped, 180 s cap, 30 s post-fix hold. Raw files:
+[`raw/run_20261022T232744Z/`](raw/run_20261022T232744Z/);
+machine-readable summary:
+[`run_20261022T232744Z_summary.json`](run_20261022T232744Z_summary.json);
+tables:
+[`run_20261022T232744Z_tables.md`](run_20261022T232744Z_tables.md).
+
+| Trial | Boot ID | Fix within 180 s | TTFF (reset) | Power-on TTFF | Whole-window fix-valid | Post-fix 30 s | Sats used (max in view) | HDOP | Best C/N0 med (max) | `get_throttled` end |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | `dc2abd39` | yes, quality 1 | 88.39 s | 144.99 s | 25.7 % (29 / 113) | 100 % (29 / 29) | 4 (4) | 7.1 | 33 (34) dBHz | `0x50005` |
+| 2 | `3715d0b1` | yes, quality 1 | 147.22 s | 211.32 s | 16.8 % (29 / 173) | 100 % (29 / 29) | 4 (4) | 8.1 | 34 (37) dBHz | `0x50000` |
+| 3 | `13306e89` | **no** | — | — | 0.0 % (0 / 170) | n/a | 0 (4) | — | 28 (31) dBHz | `0x50005` |
+
+Combined:
+
+| Measure | Value |
+|---|---|
+| Trials with a fix within 180 s | **2 / 3** |
+| Trials holding the fix for the 30 s post-fix window | **2 / 3** |
+| Power-on TTFF min / median / max | **144.99 / 178.16 / 211.32 s** |
+| Whole-window fix-valid fraction (includes pre-fix time) | **12.7 %** (58 / 456) |
+| Post-fix fix-valid fraction | **100 %** (58 / 58), but only ~30 s each |
+| Distinct boot IDs | **3 / 3** |
+| UBX reset observed | **0 / 3** (NMEA gaps 0.11–0.33 s) |
+| Any trial aborted | no |
+| Coordinates stored | no |
+
+**Interpretation.** Trial 1 fixed after 88.4 s (145.0 s after power-on); trial 2
+after 147.2 s (211.3 s after power-on); trial 3 did not fix within 180 s. When a
+fix was present it was stable: no losses, `sec_since_last_fix` ≤ 0.3 s, and all
+29 samples in each 30 s hold were valid. That is useful short-term evidence, not
+a steady-state availability figure.
+
+The limiting factor is sky view, not the UART: only **four satellites were used**
+(HDOP 7.1–8.1), and `sats_in_view` never exceeded four. A clean open-sky view
+would be expected to show more satellites and better geometry; these numbers are
+**placement-limited**. Treat this run as a marginal/lower-bound result, not a
+representative open-sky benchmark, and do not pool it with a later run under
+different antenna conditions. If a clean open-sky figure is needed, repeat the
+campaign after checking the antenna connector, ground plane and sky view.
+
+The power-on TTFF values are derived as `pi_uptime_at_start_s + TTFF (reset)`
+(56.6 + 88.39 s; 64.1 + 147.22 s). The first logged sample was invalid in both
+trials, so no fix was present at trial start. The receiver was powered from the
+Pi, but the UBX reset was not acknowledged; these are **power-cycle starts**, not
+verified receiver cold starts. Under-voltage/throttling was present
+(`0x50005` at arm and at the end; trial 2 ended at `0x50000`), so this is not a
+clean-power run. `0x50000` means the flags occurred but were not current at the
+final sample; `0x50005` includes current under-voltage/throttling. SoC stayed at
+46.7–59.9 °C across the three trials (the app was stopped during each test).
+
 ## Why a power-cycle per trial
 
 The receiver has never achieved a fix in the vehicle sessions (0 % in all three
 post-mitigation sessions; the module streamed NMEA with `fix_quality 0`,
 0 satellites used, and 0–2 in view). The likely cause is antenna/sky view, not
-the Pi UART. This test removes the vehicle and workload and gives the receiver
-the best available sky view.
+the Pi UART. This test removes the vehicle and workload and was intended to give
+the receiver an open-sky view. In this run the placement still yielded only four
+satellites, so it remained marginal (see Results).
 
 Each trial is one **full Pi power cycle**, so the receiver is power-cycled too.
 The harness also sends a receiver-level cold-start command (`UBX-CFG-RST`,
@@ -66,7 +126,7 @@ almanac/ephemeris across the Pi power cycle. Report TTFF accordingly:
 | Placement | stationary, antenna in open sky, no vehicle roof |
 | Duration cap | **180 s** per trial (3 min) |
 | Early stop | after a valid GGA fix has been held for **30 s** |
-| Cold start | full Pi power cycle; `UBX-CFG-RST` is also attempted (not acknowledged by this receiver) |
+| Start | full Pi power cycle; `UBX-CFG-RST` is also attempted (not acknowledged by this receiver) |
 | Sampling | 1 Hz |
 | Trials | 3 power-ons (target 3) |
 | App state | `transitguard` stopped during the trial (serial is exclusive); LCD shows the result |

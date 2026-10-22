@@ -346,19 +346,19 @@ v2.1 outage-recovery recheck was run on 2026-10-22 after these sessions:
 
 ## 10. Current known state & gotchas
 
-1. **GPS has never achieved a fix.** The module is alive and streams clean NMEA, but reports
-   `fix_quality 0`, `sats_used 0`, `sats_in_view 0–2`, `best C/N0 29 dBHz` (a fix needs ≥4 sats
-   at ≈35–40 dBHz). This is an **antenna / sky-view** limitation, not a Pi or serial problem.
-   Since commit `c53d1e3` the app asks the module for GGA/GSA/GSV via `UBX-CFG-MSG`
-   (`GPS_ENABLE_SENTENCES`), so these diagnostics are available. There is no
-   `.gps_last_known.json` yet — expect it to appear when a fix is first achieved.
-   **Open-sky boot campaign (prepared 2026-10-22):** `tools/run_gps_trials.py`
-   installs a one-trial-per-power-on unit, stops `transitguard` during the test,
-   writes metrics only (no coordinates) and shows the result on the LCD. The
-   boot unit is installed and armed for 3 open-sky power cycles; a 60 s indoor
-   pilot saw healthy NMEA (416 lines) but only 0–2 satellites and no fix, and
-   the receiver did not acknowledge UBX, so the power cycle is the cold-start
-   evidence. Results are pending; availability/TTFF only, no surveyed reference.
+1. **GPS has achieved fixes only in the 2026-10-23 power-cycle campaign, and only
+   with a marginal sky view.** The module streams clean NMEA; in-vehicle sessions
+   remain 0 %. In the three power-on trials: **2 / 3 fixed** (power-on TTFF
+   145.0 s and 211.3 s), **4 satellites used**, HDOP 7.1–8.1, and trial 3 did not
+   fix within 180 s. When fixed, the 30 s post-fix hold was 100 % valid (58 / 58),
+   but the whole-window fix-valid fraction was 12.7 % (58 / 456). This is a
+   **placement-limited** result, not a clean open-sky benchmark; check the antenna
+   connector/ground plane/sky view before a repeat. `UBX-MON-VER` and
+   `UBX-CFG-RST` were not acknowledged (NMEA gap 0.1–0.3 s), so these are
+   power-cycle starts, not verified receiver cold starts. `.gps_last_known.json`
+   now exists. Under-voltage/throttling `0x50005` was present. The boot unit is
+   **installed but disarmed**; results are in
+   [`docs/measurements/gps_open_sky/`](docs/measurements/gps_open_sky/).
 2. **USB camera fragility.** After some restarts the UVC camera fails to stream
    (`uvcvideo: Failed to set UVC probe control`), `cv2.VideoCapture` still reports *opened*, and
    `read()` always fails. Commit `c53d1e3` replaced the old tight retry loop (which pegged a core
