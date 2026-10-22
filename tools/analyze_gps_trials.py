@@ -101,11 +101,29 @@ def main():
         if valid and elapsed:
             first_fix = next((e for r, e in zip(samples, elapsed)
                               if r.get("fix_valid") == "True"), None)
+        ttff = summary.get("ttff_s")
+        if ttff is None:
+            ttff = first_fix
+        uptime = as_float(summary.get("pi_uptime_at_start_s"))
+        gap = as_float(summary.get("nmea_gap_after_reset_s"))
+        gap_cold = gap is not None and gap >= 2.0
+        power_cycle = uptime is not None and uptime < 300
+        fix_at_start = bool(ttff is not None and ttff <= 1.0
+                            and uptime is not None and uptime > 5)
+        power_on_ttff = None
+        power_on_upper = None
+        if ttff is not None and not gap_cold and power_cycle:
+            if fix_at_start:
+                power_on_upper = round(uptime, 2)
+            else:
+                power_on_ttff = round(uptime + ttff, 2)
+        start_basis = ("ubx_reset_observed" if gap_cold else
+                       ("power_cycle_ubx_unacknowledged" if power_cycle else "unverified"))
         t = {
             "folder": d,
             "trial": summary.get("trial"),
             "boot_id": summary.get("boot_id"),
-            "pi_uptime_at_start_s": summary.get("pi_uptime_at_start_s"),
+            "pi_uptime_at_start_s": uptime,
             "complete": summary.get("complete"),
             "completed_reason": summary.get("completed_reason"),
             "samples": len(samples),
@@ -113,10 +131,17 @@ def main():
             "fix_valid_fraction": round(len(valid) / len(samples), 3),
             "post_fix_samples": summary.get("post_fix_samples"),
             "post_fix_fix_valid_fraction": summary.get("post_fix_fix_valid_fraction"),
-            "ttff_s": summary.get("ttff_s", first_fix),
+            "ttff_s": ttff,
             "ttff_from_samples_s": first_fix,
-            "sats_used_median": med(sats),
-            "sats_used_min": min(sats) if sats else None,
+            "power_on_ttff_s": power_on_ttff,
+            "power_on_ttff_upper_bound_s": power_on_upper,
+            "fix_at_trial_start": fix_at_start,
+            "power_cycle_observed": power_cycle,
+            "start_basis": start_basis,
+            "ttff_effective_s": (power_on_ttff if power_on_ttff is not None
+                                 else (None if power_on_upper is not None else ttff)),
+            "ttff_is_upper_bound": power_on_upper is not None,
+            "sats_used_median": med(sats),            "sats_used_min": min(sats) if sats else None,
             "sats_used_max": max(sats) if sats else None,
             "sats_in_view_median": med(view),
             "sats_in_view_max": max(view) if view else None,
@@ -127,8 +152,8 @@ def main():
             "stale_age_end_s": stale[-1] if stale else None,
             "fix_losses": summary.get("fix_losses", 0),
             "nmea_gap_after_reset_s": summary.get("nmea_gap_after_reset_s"),
-            "cold_start_observed": summary.get("cold_start_observed"),
-            "cold_start_basis": summary.get("cold_start_basis"),
+            "cold_start_raw": summary.get("cold_start_observed"),
+            "cold_start_basis_raw": summary.get("cold_start_basis"),
             "nmea_lines": summary.get("nmea_lines"),
             "aborted": summary.get("aborted"),
             "temp_c_max": summary.get("temp_c_max"),
@@ -140,7 +165,9 @@ def main():
     if not trials:
         sys.exit(f"no usable trial samples in {run}")
     fixed = [t for t in trials if t["ttff_s"] is not None]
-    ttffs = [t["ttff_s"] for t in fixed]
+    ttffs = [t["ttff_effective_s"] for t in trials if t["ttff_effective_s"] is not None]
+    upper_bounds = [t["power_on_ttff_upper_bound_s"] for t in trials
+                    if t["power_on_ttff_upper_bound_s"] is not None]
     boot_ids = [t["boot_id"] for t in trials if t["boot_id"]]
     distinct_boot_ids = len(set(boot_ids))
     total_samples = sum(t["samples"] for t in trials)
@@ -158,6 +185,8 @@ def main():
         "ttff_min_s": min(ttffs) if ttffs else None,
         "ttff_median_s": med(ttffs),
         "ttff_max_s": max(ttffs) if ttffs else None,
+        "trials_ttff_upper_bound": len(upper_bounds),
+        "ttff_upper_bounds_s": upper_bounds,
         "fix_valid_fraction_weighted": round(total_valid / total_samples, 3) if total_samples else None,
         "post_fix_fix_valid_fraction_weighted": (round(post_num / post_den, 3)
                                                  if post_den else None),
@@ -165,8 +194,10 @@ def main():
         "valid_samples": total_valid,
         "distinct_boot_ids": distinct_boot_ids,
         "power_cycle_trials": bool(n > 1 and len(boot_ids) == n and distinct_boot_ids == n),
-        "cold_start_observed_all": all(t["cold_start_observed"] for t in trials),
-        "cold_start_bases": sorted({t["cold_start_basis"] for t in trials if t["cold_start_basis"]}),
+        "power_cycle_all": all(t["power_cycle_observed"] for t in trials),
+        "cold_start_verified_all": all(
+            t["start_basis"] == "ubx_reset_observed" for t in trials),
+        "start_bases": sorted({t["start_basis"] for t in trials if t["start_basis"]}),
         "complete_all": all(t["complete"] for t in trials),
         "aborted_any": any(t["aborted"] for t in trials),
         "coords_retained": False,
@@ -222,23 +253,28 @@ def main():
               f"throttled `{manifest.get('throttled_start') or manifest.get('throttled_at_arm')}` · "
               f"{manifest.get('disk_free_mb')} MB free")
     md.append("")
-    md.append("| Trial | Samples | Fix-valid | Post-fix valid | TTFF | Sats used med (min–max) | "
-              "Sats in view med (max) | Best SNR med | HDOP med | Max stale age | "
-              "Fix losses | NMEA gap after reset | Cold start observed | Basis | Uptime | Reason | Boot ID |")
-    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    md.append("| Trial | Samples | Fix-valid | Post-fix valid | TTFF (reset) | Power-on TTFF | "
+              "Sats used med (min–max) | Sats in view med (max) | Best SNR med | HDOP med | "
+              "Max stale age | Fix losses | NMEA gap | Start basis | Uptime | Fix at start | "
+              "Reason | Boot ID |")
+    md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for t in trials:
         pf = t.get("post_fix_fix_valid_fraction")
         pf_s = f"{pf * 100:.1f} %" if pf is not None else "n/a"
+        po = t.get("power_on_ttff_s")
+        ub = t.get("power_on_ttff_upper_bound_s")
+        po_s = f"{po} s" if po is not None else (f"≤ {ub} s" if ub is not None else "n/a")
         md.append(
             f"| {t['trial']} | {t['samples']} | {t['fix_valid_fraction'] * 100:.1f} % | "
             f"{pf_s} | "
-            f"{t['ttff_s']} s | {t['sats_used_median']} "
+            f"{t['ttff_s'] if t['ttff_s'] is not None else 'n/a'} s | {po_s} | "
+            f"{t['sats_used_median']} "
             f"({t['sats_used_min']}–{t['sats_used_max']}) | "
             f"{t['sats_in_view_median']} ({t['sats_in_view_max']}) | "
             f"{t['best_snr_median']} | {t['hdop_median']} | "
             f"{t['stale_age_max_s']} s | {t['fix_losses']} | "
-            f"{t['nmea_gap_after_reset_s']} s | {t['cold_start_observed']} | "
-            f"{t['cold_start_basis']} | {t['pi_uptime_at_start_s']} s | "
+            f"{t['nmea_gap_after_reset_s']} s | {t['start_basis']} | "
+            f"{t['pi_uptime_at_start_s']} s | {t['fix_at_trial_start']} | "
             f"{t['completed_reason']} | {str(t['boot_id'])[:8]} |"
         )
     md.append("")
@@ -247,8 +283,13 @@ def main():
     md.append(f"| Trials with a fix | **{combined['trials_with_fix']} / {combined['trials']}** |")
     md.append(f"| Trials holding fix for the post-fix window | "
               f"**{combined['trials_holding_fix']} / {combined['trials']}** |")
-    md.append(f"| TTFF min / median / max | {combined['ttff_min_s']} / "
-              f"**{combined['ttff_median_s']}** / {combined['ttff_max_s']} s |")
+    md.append(f"| TTFF (power-on where reset unacknowledged) min / median / max | "
+              f"{combined['ttff_min_s']} / **{combined['ttff_median_s']}** / "
+              f"{combined['ttff_max_s']} s |")
+    if combined["trials_ttff_upper_bound"]:
+        md.append(f"| Trials with only a TTFF upper bound | "
+                  f"{combined['trials_ttff_upper_bound']} "
+                  f"({', '.join(str(x) + ' s' for x in combined['ttff_upper_bounds_s'])}) |")
     md.append(f"| Fix-valid fraction (all samples, includes cold start) | "
               f"**{combined['fix_valid_fraction_weighted'] * 100:.1f} %** "
               f"({combined['valid_samples']} / {combined['samples']}) |")
@@ -256,8 +297,10 @@ def main():
     md.append(f"| Fix-valid fraction after first fix | "
               f"**{post * 100:.1f} %** |" if post is not None else
               "| Fix-valid fraction after first fix | n/a |")
-    md.append(f"| Cold start observed in all trials | {combined['cold_start_observed_all']} |")
-    md.append(f"| Cold-start basis | {', '.join(combined['cold_start_bases']) or 'n/a'} |")
+    md.append(f"| Power-cycle observed in all trials | {combined['power_cycle_all']} |")
+    md.append(f"| UBX cold start verified (reset gap) in all trials | "
+              f"{combined['cold_start_verified_all']} |")
+    md.append(f"| Start basis | {', '.join(combined['start_bases']) or 'n/a'} |")
     md.append(f"| Distinct boot IDs / power-cycle trials | {combined['distinct_boot_ids']} / "
               f"{combined['power_cycle_trials']} |")
     md.append(f"| Any trial aborted | {combined['aborted_any']} |")
@@ -267,7 +310,11 @@ def main():
         md.append(f"**Coordinate columns found (should be empty):** "
                   f"{', '.join(checks['coord_columns_found'])}")
     md.append("Availability only: no surveyed reference, so no position-accuracy claim. "
-              "TTFF is measured from the UBX cold-start command to the first valid GGA fix.")
+              "TTFF (reset) is measured from the UBX cold-start command to the first valid "
+              "GGA fix. Where the reset was not acknowledged, Power-on TTFF is the Pi uptime "
+              "at trial start plus TTFF (an upper bound if a fix was already present). "
+              "Power-cycle starts are not verified receiver cold starts: the backup domain "
+              "may retain almanac/ephemeris.")
     with open(os.path.join(args.out, f"{name}_tables.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(md) + "\n")
 

@@ -37,17 +37,27 @@ post-mitigation sessions; the module streamed NMEA with `fix_quality 0`,
 the Pi UART. This test removes the vehicle and workload and gives the receiver
 the best available sky view.
 
-Each trial is one **full Pi power cycle**, so the receiver is genuinely
-power-cycled too. The harness also sends a receiver-level cold-start command
-(`UBX-CFG-RST`, `navBbrMask=0xFFFF`, `resetMode=0x02`) at the start of the trial.
-The trial summary records both bases:
+Each trial is one **full Pi power cycle**, so the receiver is power-cycled too.
+The harness also sends a receiver-level cold-start command (`UBX-CFG-RST`,
+`navBbrMask=0xFFFF`, `resetMode=0x02`) at the start of the trial. The trial
+summary records both bases:
 
 - `pi_uptime_at_start_s` and a distinct `boot_id` per trial (power-cycle
   evidence), and
 - the NMEA gap after the UBX reset (whether the software reset was observed).
 
-This means the run does not depend on the UBX reset working: the power cycle is
-the primary cold start, and the reset is a secondary control.
+The pilot probe showed that this receiver/clone **did not acknowledge UBX**: no
+`UBX-MON-VER` response and a 0.1 s NMEA gap after the reset. The power cycle is
+therefore the only start control, and it is a **power-cycle start, not a
+verified receiver cold start**: the NEO-6M backup domain may retain
+almanac/ephemeris across the Pi power cycle. Report TTFF accordingly:
+
+- `TTFF (reset)` is from the UBX command to the first valid GGA fix.
+- `Power-on TTFF` is `pi_uptime_at_start_s + TTFF (reset)` when the reset was
+  not acknowledged and no fix was present at trial start. If a fix was already
+  present, only an upper bound (the uptime) can be reported.
+- Do not describe these as strictly cold starts unless the reset gap confirms a
+  receiver reset (it did not here).
 
 ## Trial definition
 
@@ -56,17 +66,19 @@ the primary cold start, and the reset is a secondary control.
 | Placement | stationary, antenna in open sky, no vehicle roof |
 | Duration cap | **180 s** per trial (3 min) |
 | Early stop | after a valid GGA fix has been held for **30 s** |
-| Cold start | full Pi power cycle + `UBX-CFG-RST` at trial start |
+| Cold start | full Pi power cycle; `UBX-CFG-RST` is also attempted (not acknowledged by this receiver) |
 | Sampling | 1 Hz |
 | Trials | 3 power-ons (target 3) |
 | App state | `transitguard` stopped during the trial (serial is exclusive); LCD shows the result |
 | Data | metrics only — **no coordinates stored** |
 
-TTFF is measured from the reset command to the first GGA with `gps_qual > 0`.
-Fix-valid fraction is reported both over the whole trial window (which includes
-the cold-start interval, so it is not a steady-state availability estimate) and
-over the post-fix window. Satellite counts, best C/N0, HDOP, fix losses and the
-age of the last fix are recorded for context only.
+TTFF is measured from the reset command to the first GGA with `gps_qual > 0`;
+where the reset was not acknowledged, the analyzer also reports **Power-on TTFF**
+= Pi uptime at trial start + TTFF. Fix-valid fraction is reported both over the
+whole trial window (which includes the cold-start interval, so it is not a
+steady-state availability estimate) and over the post-fix window. Satellite
+counts, best C/N0, HDOP, fix losses and the age of the last fix are recorded for
+context only.
 
 ## Workflow
 
@@ -74,9 +86,9 @@ age of the last fix are recorded for context only.
 
 ```bash
 scp tools/run_gps_trials.py tools/analyze_gps_trials.py \
-    john@10.80.3.194:/home/john/fatigue/tools/
+    john@<pi-ip>:/home/john/fatigue/tools/
 
-ssh john@10.80.3.194
+ssh john@<pi-ip>
 cd /home/john/fatigue
 ./fatigue-env/bin/python3 tools/run_gps_trials.py \
     --install --arm --target 3 --max-sec 180 --post-fix-sec 30
@@ -117,9 +129,9 @@ will be retried on the next boot because the state was not advanced.
 ### Pull and analyze
 
 ```bash
-scp -r john@10.80.3.194:/home/john/fatigue/logs/gps_trials/run_<UTC> \
+scp -r john@<pi-ip>:/home/john/fatigue/logs/gps_trials/run_<UTC> \
     docs/measurements/gps_open_sky/raw/
-scp john@10.80.3.194:/home/john/fatigue/logs/gps_trials/BOOT_STATE.done.json \
+scp john@<pi-ip>:/home/john/fatigue/logs/gps_trials/BOOT_STATE.done.json \
     docs/measurements/gps_open_sky/raw/run_<UTC>/ 2>/dev/null || true
 
 python tools/analyze_gps_trials.py \
@@ -176,5 +188,9 @@ identity (`UBX-MON-VER`).
 - **No clean-power claim.** `get_throttled` is recorded; the Pi has shown
   `0x50005` (under-voltage + throttling) on earlier runs. A non-zero value does
   not invalidate fix availability, but it must be reported.
-- The receiver-level cold start is a software command; the separate Pi power
-  cycle is the stronger cold-start evidence. Both are recorded.
+- **No verified receiver cold start.** The UBX cold-start command was not
+  acknowledged by this receiver/clone, and the backup domain may retain
+  almanac/ephemeris across the Pi power cycle. These are **power-cycle starts**;
+  the analyzer records that the UBX reset was not observed and reports a
+  power-on TTFF where possible. A fix already present at trial start is reported
+  only as an upper bound.
