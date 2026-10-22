@@ -349,9 +349,11 @@ v2.1 outage-recovery recheck was run on 2026-10-22 after these sessions:
    `.gps_last_known.json` yet — expect it to appear when a fix is first achieved.
    **Open-sky boot campaign (prepared 2026-10-22):** `tools/run_gps_trials.py`
    installs a one-trial-per-power-on unit, stops `transitguard` during the test,
-   writes metrics only (no coordinates) and shows the result on the LCD; results
-   are pending, and this remains an availability/TTFF test with no surveyed
-   reference position.
+   writes metrics only (no coordinates) and shows the result on the LCD. The
+   boot unit is installed and armed for 3 open-sky power cycles; a 60 s indoor
+   pilot saw healthy NMEA (416 lines) but only 0–2 satellites and no fix, and
+   the receiver did not acknowledge UBX, so the power cycle is the cold-start
+   evidence. Results are pending; availability/TTFF only, no surveyed reference.
 2. **USB camera fragility.** After some restarts the UVC camera fails to stream
    (`uvcvideo: Failed to set UVC probe control`), `cv2.VideoCapture` still reports *opened*, and
    `read()` always fails. Commit `c53d1e3` replaced the old tight retry loop (which pegged a core

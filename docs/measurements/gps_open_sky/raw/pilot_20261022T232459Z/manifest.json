@@ -1,0 +1,27 @@
+{
+  "active_ssid": "Redmi 14C",
+  "app_head": "c1f70c31c3e49b85935f28ebff3f8a3200f43524",
+  "baud": 9600,
+  "clock_sync": "yes",
+  "cold_start_method": "UBX-CFG-RST navBbrMask=0xFFFF (receiver-level; no Pi reboot between trials)",
+  "coords_retained": false,
+  "disk_free_mb": 577.5,
+  "gap_sec": 120,
+  "max_sec": 60,
+  "mode": "probe",
+  "module": {
+    "extensions": [],
+    "hw": null,
+    "sw": null,
+    "ubx": false
+  },
+  "port": "/dev/serial0",
+  "post_fix_sec": 30,
+  "run": "20261022T232459Z",
+  "started_utc": "2026-10-22T23:24:59Z",
+  "temp_c_start": 73.0,
+  "throttled_start": "0x50005",
+  "trials_planned": 1,
+  "utc_offset": "+0100",
+  "vehicle_monitor_sha256": "1ecd75dcb646decd27a6c29b55415efe317814c023c60c677bc58d8b97ef8f8f"
+}

@@ -35,7 +35,9 @@ explains the artifacts and how to reproduce them.
 > antenna in open sky) is prepared in [`gps_open_sky/`](gps_open_sky/).
 > Each power-on runs one short trial (3 min cap, stops 30 s after a fix) and
 > leaves the result on the LCD; no coordinates are stored. Availability/TTFF
-> only — no surveyed reference, so no position-accuracy claim. Results pending.
+> only — no surveyed reference, so no position-accuracy claim. A 60 s indoor
+> pilot saw a healthy NMEA stream (416 lines) but 0–2 satellites and no fix;
+> it is not part of the three-trial result. Open-sky power cycles pending.
 
 ## Naming
 

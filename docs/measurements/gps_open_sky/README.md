@@ -7,9 +7,27 @@ it while the receiver is stationary with a clear view of the sky?
 surveyed reference position here, so this study makes **no position-accuracy
 claim**. It is also not a moving-vehicle, fleet, or long-term reliability test.
 
-> **Status:** the harness and boot unit are implemented; the three power-on
-> trials are pending. Results will be added below after the Pi is powered on in
-> open sky.
+> **Status:** the harness and boot unit are installed and armed; the three
+> power-on open-sky trials are pending. A short pilot probe is reported below.
+> Results will be added after the Pi is power-cycled three times in open sky.
+
+## Pilot probe (not one of the three trials)
+
+A 60 s probe was run on 2026-10-22T23:24:59Z while the Pi was indoors:
+
+- NMEA stream healthy: **416 lines / 60 s** (53 GGA, 120 GSV, 59 RMC), 9600 baud.
+- **No fix**: `sats_in_view` 0–2, best C/N0 34 dBHz, `sats_used` 0.
+- `UBX-MON-VER` got no response and the NMEA gap after `UBX-CFG-RST` was
+  0.1 s: this receiver/clone did not acknowledge UBX, so the software cold
+  start was **not observed**. The power-cycle cold start is therefore the
+  primary evidence in this campaign; the UBX command is only a secondary
+  control.
+- Temperature 69.6–72.5 °C; `get_throttled 0x50005`.
+
+This is consistent with an obstructed sky view, not a dead UART: the serial
+path and NMEA parser work. Raw pilot files are in
+[`raw/pilot_20261022T232459Z/`](raw/pilot_20261022T232459Z/). They are **not**
+included in the three-trial availability result.
 
 ## Why a power-cycle per trial
 
