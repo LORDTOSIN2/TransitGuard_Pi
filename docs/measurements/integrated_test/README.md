@@ -56,9 +56,10 @@ state file is armed, so ordinary power cycles are unaffected.
 ssh john@john.local
 cd /home/john/fatigue
 
-# 1. Arm the next power-on. 30 s gives the app time to open the camera.
+# 1. Arm the next power-on. 60 s gives the app time to open the camera and
+#    lets you carry the Pi/antenna outdoors before session 1 starts.
 ./fatigue-env/bin/python3 tools/run_integrated_test.py --arm \
-    --sessions 3 --session-sec 150 --gap-sec 30 --boot-delay 30 \
+    --sessions 3 --session-sec 150 --gap-sec 30 --boot-delay 60 \
     --label outdoor1
 
 # 2. Power off, move the Pi/antenna outdoors, power on.

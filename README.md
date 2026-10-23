@@ -360,7 +360,7 @@ LAN.
 # on the Pi: install the inert boot unit once, then arm the next power-on
 ./fatigue-env/bin/python3 tools/run_integrated_test.py --install
 ./fatigue-env/bin/python3 tools/run_integrated_test.py --arm \
-    --sessions 3 --session-sec 150 --gap-sec 30 --boot-delay 30 --label outdoor1
+    --sessions 3 --session-sec 150 --gap-sec 30 --boot-delay 60 --label outdoor1
 
 # power off/on, move outdoors, wait for "3/3 DONE / PULL LOGS" on the LCD
 # then pull the run folder and reconcile message IDs with Supabase:
