@@ -923,8 +923,8 @@ class _ArgsView:
 # ---------------------------------------------------------------------------
 UNIT_TEMPLATE = """[Unit]
 Description=TransitGuard integrated outdoor test (one boot, 3 sessions)
-After=transitguard.service network-online.target
-Wants=transitguard.service network-online.target
+After=transitguard.service
+Wants=transitguard.service
 ConditionPathExists={state}
 
 [Service]

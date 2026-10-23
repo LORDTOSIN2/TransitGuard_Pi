@@ -30,9 +30,10 @@ What is reported
 * explicit caveats: HTTP 201 is Edge Function acceptance, not proof of a row;
   a message may be buffered and delivered after the query grace window.
 
-The script does not modify the run's samples.  It writes
-`delivery_supabase.json` next to the trace and updates the `delivery_supabase`
-member of `summary.json` if present.
+The script looks up the scheduled message IDs directly in Supabase (with a
+time-window fallback), so it can find messages flushed from the offline buffer
+after the run. It writes `delivery_supabase.json` next to the trace and updates
+the `delivery_supabase` member of `summary.json` if present.
 """
 import argparse
 import datetime as dt
@@ -113,6 +114,41 @@ def supabase_rows(base_url, key, device_id, start_epoch, end_epoch):
     })
     with urllib.request.urlopen(req, timeout=20) as resp:
         return json.loads(resp.read().decode("utf-8")), url
+
+
+def supabase_rows_by_ids(base_url, key, message_ids):
+    """Fetch rows by unique message_id, independent of clock/window.
+
+    This is the preferred lookup: it finds a buffered message delivered after
+    the nominal run window and does not depend on the Pi's clock agreeing with
+    Supabase's `created_at`.
+    """
+    base = base_url.rstrip("/")
+    if base.endswith("/rest/v1"):
+        endpoint = base + "/telemetry"
+    else:
+        endpoint = base + "/rest/v1/telemetry"
+    rows = []
+    urls = []
+    ids = sorted(set(i for i in message_ids if i))
+    for start in range(0, len(ids), 30):
+        chunk = ids[start:start + 30]
+        params = {
+            "select": "message_id,created_at,timestamp,driver_state,device_id",
+            "message_id": "in.(" + ",".join(chunk) + ")",
+            "limit": "1000",
+        }
+        url = endpoint + "?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(url, headers={
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            rows.extend(json.loads(resp.read().decode("utf-8")))
+        urls.append(url)
+    return rows, urls
+
 
 
 def main():
@@ -203,10 +239,20 @@ def main():
         return 0
 
     try:
-        rows, url = supabase_rows(args.supabase_url, args.supabase_key, device_id,
-                                  start_epoch - 30, query_end)
+        query_mode = "message_id"
+        try:
+            if not sched:
+                raise RuntimeError("no scheduled message IDs in trace")
+            rows, urls = supabase_rows_by_ids(args.supabase_url, args.supabase_key, sched.keys())
+            query_url = urls[0] if urls else ""
+        except Exception as id_exc:  # noqa: BLE001
+            print(f"message-ID lookup failed ({id_exc}); falling back to created_at window")
+            rows, query_url = supabase_rows(args.supabase_url, args.supabase_key, device_id,
+                                           start_epoch - 30, query_end)
+            query_mode = "created_at_window"
         report["supabase_checked"] = True
-        report["query_url"] = url
+        report["query_mode"] = query_mode
+        report["query_url"] = query_url
         row_by_id = {r.get("message_id"): r for r in rows if r.get("message_id")}
         found = {mid for mid in sched if mid in row_by_id}
         missing = [mid for mid in sched if mid not in row_by_id]
@@ -243,6 +289,7 @@ def main():
             }
         report.update({
             "supabase_rows_in_window": len(rows),
+            "supabase_rows_found": len(rows),
             "scheduled_found": len(found),
             "scheduled_missing": len(missing),
             "delivery_ratio": (round(len(found) / len(sched), 4) if sched else None),

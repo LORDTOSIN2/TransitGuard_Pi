@@ -82,7 +82,10 @@ ConditionPathExists=/home/john/fatigue/logs/integrated/BOOT_STATE.json
 ```
 
 It runs after `transitguard.service`, as user `john`, and does not stop or
-replace the app.
+replace the app. It has no network-online dependency: if the Pi is outdoors with
+no reachable network, the sessions still record to the local SD card and the LCD
+still shows progress. Packet uploads may fail and buffer; the message-ID
+reconciliation can be run later after reconnecting.
 
 ## Manual run
 
@@ -170,7 +173,8 @@ python3 tools/analyze_integrated_test.py \
 ```
 
 Use the **public publishable/anon key**, not a service-role key. The script
-queries only the run window and device, matches `message_id`, and writes
+looks up the scheduled message IDs directly in chunks (falling back to a
+time-window query if necessary), matches `message_id`, and writes
 `delivery_supabase.json`, including:
 
 - scheduled/attempted/HTTP-201/failed/dropped counts;
