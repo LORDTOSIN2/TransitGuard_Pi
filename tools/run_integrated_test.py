@@ -501,7 +501,7 @@ def run_phase(recorder, lcd, phases, phases_path, name, session, duration,
     print(f"\n>>> {name.upper()} {session}/{total} {duration}s  "
           f"{phase['start_utc']} -> {phase['end_utc']}")
     lcd.show(f"T{session}/{total} START" if session else "PRE START",
-             "KEEP PACKET UP" if session else "WAIT FOR GPS", force=True)
+             "WALK + RECORD" if session else "WAIT FOR GPS", force=True)
 
     next_sample = start_epoch
     last_lcd = 0.0
