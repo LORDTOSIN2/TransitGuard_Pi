@@ -1,0 +1,86 @@
+{
+  "phases": [
+    {
+      "actual_end_epoch": 1792749188.677,
+      "actual_end_utc": "2026-10-23T09:53:08Z",
+      "duration_sec": 20,
+      "end_epoch": 1792748687.461,
+      "end_utc": "2026-10-23T09:44:47Z",
+      "gps_fix_ready": true,
+      "gps_fix_ready_utc": "2026-10-23T09:53:08Z",
+      "gps_fix_samples_required": 3,
+      "gps_gate_required": true,
+      "gps_wait_timeout_sec": 900,
+      "name": "pre",
+      "session": 0,
+      "start_epoch": 1792748667.461,
+      "start_utc": "2026-10-23T09:44:27Z"
+    },
+    {
+      "actual_end_epoch": 1792749338.734,
+      "actual_end_utc": "2026-10-23T09:55:38Z",
+      "duration_sec": 150,
+      "end_epoch": 1792749338.679,
+      "end_utc": "2026-10-23T09:55:38Z",
+      "name": "session_1",
+      "session": 1,
+      "start_epoch": 1792749188.679,
+      "start_utc": "2026-10-23T09:53:08Z"
+    },
+    {
+      "actual_end_epoch": 1792749368.802,
+      "actual_end_utc": "2026-10-23T09:56:08Z",
+      "duration_sec": 30,
+      "end_epoch": 1792749368.77,
+      "end_utc": "2026-10-23T09:56:08Z",
+      "name": "gap_2",
+      "session": 2,
+      "start_epoch": 1792749338.77,
+      "start_utc": "2026-10-23T09:55:38Z"
+    },
+    {
+      "actual_end_epoch": 1792749518.985,
+      "actual_end_utc": "2026-10-23T09:58:38Z",
+      "duration_sec": 150,
+      "end_epoch": 1792749518.804,
+      "end_utc": "2026-10-23T09:58:38Z",
+      "name": "session_2",
+      "session": 2,
+      "start_epoch": 1792749368.804,
+      "start_utc": "2026-10-23T09:56:08Z"
+    },
+    {
+      "actual_end_epoch": 1792749549.105,
+      "actual_end_utc": "2026-10-23T09:59:09Z",
+      "duration_sec": 30,
+      "end_epoch": 1792749548.989,
+      "end_utc": "2026-10-23T09:59:08Z",
+      "name": "gap_3",
+      "session": 3,
+      "start_epoch": 1792749518.989,
+      "start_utc": "2026-10-23T09:58:38Z"
+    },
+    {
+      "actual_end_epoch": 1792749699.177,
+      "actual_end_utc": "2026-10-23T10:01:39Z",
+      "duration_sec": 150,
+      "end_epoch": 1792749699.108,
+      "end_utc": "2026-10-23T10:01:39Z",
+      "name": "session_3",
+      "session": 3,
+      "start_epoch": 1792749549.108,
+      "start_utc": "2026-10-23T09:59:09Z"
+    },
+    {
+      "actual_end_epoch": 1792749709.238,
+      "actual_end_utc": "2026-10-23T10:01:49Z",
+      "duration_sec": 10,
+      "end_epoch": 1792749709.18,
+      "end_utc": "2026-10-23T10:01:49Z",
+      "name": "post",
+      "session": 0,
+      "start_epoch": 1792749699.18,
+      "start_utc": "2026-10-23T10:01:39Z"
+    }
+  ]
+}

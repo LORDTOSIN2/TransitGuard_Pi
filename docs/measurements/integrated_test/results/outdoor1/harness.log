@@ -1,0 +1,46 @@
+Oct 23 07:49:44 pi-host systemd[1]: Starting tg-integrated-test.service - TransitGuard integrated outdoor test (one boot, 3 sessions)...
+Oct 23 07:49:46 pi-host python3[1105]: integrated test: waiting 60s for boot/app stabilisation
+Oct 23 08:51:36 pi-host python3[1105]: === integrated test <PI_APP_DIR>/logs/integrated/run_20261023T064747Z_outdoor1 (boot) 2026-10-23T07:51:36Z
+Oct 23 08:51:36 pi-host python3[1105]: plan: {'boot_delay': 60, 'gap_sec': 30, 'label': 'outdoor1', 'lcd': True, 'max_start_temp': 80.0, 'max_temp': 86.0, 'post_sec': 10, 'pre_sec': 20, 'session_sec': 150, 'sessions': 3, 'trace': True}
+Oct 23 08:51:37 pi-host python3[1105]: enabling telemetry trace and restarting app once...
+Oct 23 08:51:37 pi-host sudo[2103]:     pi-host : PWD=<PI_APP_DIR> ; USER=root ; COMMAND=/usr/bin/tee /etc/systemd/system/transitguard.service.d/zz-integrated-trace.conf
+Oct 23 08:51:37 pi-host sudo[2103]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Oct 23 08:51:37 pi-host sudo[2103]: pam_unix(sudo:session): session closed for user root
+Oct 23 08:51:37 pi-host sudo[2106]:     pi-host : PWD=<PI_APP_DIR> ; USER=root ; COMMAND=/usr/bin/systemctl daemon-reload
+Oct 23 08:51:37 pi-host sudo[2106]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Oct 23 08:51:38 pi-host sudo[2106]: pam_unix(sudo:session): session closed for user root
+Oct 23 08:51:38 pi-host sudo[2137]:     pi-host : PWD=<PI_APP_DIR> ; USER=root ; COMMAND=/usr/bin/systemctl restart transitguard
+Oct 23 08:51:38 pi-host sudo[2137]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Oct 23 08:51:40 pi-host sudo[2137]: pam_unix(sudo:session): session closed for user root
+Oct 23 08:52:05 pi-host python3[1105]: app ready: state=NORMAL alc=6.918451203631311 fix=False
+Oct 23 08:52:05 pi-host python3[1105]: >>> PRE 0/3 20s  2026-10-23T07:52:05Z -> 2026-10-23T07:52:25Z
+Oct 23 08:52:26 pi-host python3[1105]: >>> SESSION_1 1/3 150s  2026-10-23T07:52:25Z -> 2026-10-23T07:54:55Z
+Oct 23 08:54:55 pi-host python3[1105]: >>> GAP_2 2/3 30s  2026-10-23T07:54:55Z -> 2026-10-23T07:55:25Z
+Oct 23 08:55:26 pi-host python3[1105]: >>> SESSION_2 2/3 150s  2026-10-23T07:55:26Z -> 2026-10-23T07:57:56Z
+Oct 23 08:57:56 pi-host python3[1105]: >>> GAP_3 3/3 30s  2026-10-23T07:57:56Z -> 2026-10-23T07:58:26Z
+Oct 23 08:58:26 pi-host python3[1105]: >>> SESSION_3 3/3 150s  2026-10-23T07:58:26Z -> 2026-10-23T08:00:56Z
+Oct 23 09:00:56 pi-host python3[1105]: >>> POST 0/3 10s  2026-10-23T08:00:56Z -> 2026-10-23T08:01:06Z
+Oct 23 09:01:16 pi-host python3[1105]: restoring app without telemetry trace...
+Oct 23 09:01:16 pi-host sudo[5297]:     pi-host : PWD=<PI_APP_DIR> ; USER=root ; COMMAND=/usr/bin/rm -f /etc/systemd/system/transitguard.service.d/zz-integrated-trace.conf
+Oct 23 09:01:16 pi-host sudo[5297]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Oct 23 09:01:16 pi-host sudo[5297]: pam_unix(sudo:session): session closed for user root
+Oct 23 09:01:16 pi-host sudo[5299]:     pi-host : PWD=<PI_APP_DIR> ; USER=root ; COMMAND=/usr/bin/systemctl daemon-reload
+Oct 23 09:01:16 pi-host sudo[5299]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Oct 23 09:01:17 pi-host sudo[5299]: pam_unix(sudo:session): session closed for user root
+Oct 23 09:01:17 pi-host sudo[5322]:     pi-host : PWD=<PI_APP_DIR> ; USER=root ; COMMAND=/usr/bin/systemctl reset-failed transitguard
+Oct 23 09:01:17 pi-host sudo[5322]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Oct 23 09:01:17 pi-host sudo[5322]: pam_unix(sudo:session): session closed for user root
+Oct 23 09:01:18 pi-host sudo[5324]:     pi-host : PWD=<PI_APP_DIR> ; USER=root ; COMMAND=/usr/bin/systemctl restart transitguard
+Oct 23 09:01:18 pi-host sudo[5324]: pam_unix(sudo:session): session opened for user root(uid=0) by (uid=1000)
+Oct 23 09:01:19 pi-host sudo[5324]: pam_unix(sudo:session): session closed for user root
+Oct 23 09:01:35 pi-host python3[1105]: === per session
+Oct 23 09:01:35 pi-host python3[1105]:   session 1: n=150 gps=0.0% sats=0.0 alc_min=7.038356595878719 face=38.7% temp=50.6-59.4
+Oct 23 09:01:35 pi-host python3[1105]:   session 2: n=150 gps=0.0% sats=0.0 alc_min=7.529507529507529 face=8.7% temp=59.4-65.2
+Oct 23 09:01:35 pi-host python3[1105]:   session 3: n=150 gps=0.0% sats=0.0 alc_min=0.5853143576932064 face=20.0% temp=64.8-70.6
+Oct 23 09:01:35 pi-host python3[1105]: === trace: scheduled=68 ok201=69 failed=1 dropped=0
+Oct 23 09:01:35 pi-host python3[1105]: === aborted: None
+Oct 23 09:01:35 pi-host python3[1105]: === artifacts: <PI_APP_DIR>/logs/integrated/run_20261023T064747Z_outdoor1
+Oct 23 09:01:35 pi-host python3[1105]: integrated test: campaign complete; disarmed for future boots.
+Oct 23 09:01:35 pi-host systemd[1]: tg-integrated-test.service: Deactivated successfully.
+Oct 23 09:01:35 pi-host systemd[1]: Finished tg-integrated-test.service - TransitGuard integrated outdoor test (one boot, 3 sessions).
+Oct 23 09:01:35 pi-host systemd[1]: tg-integrated-test.service: Consumed 4.301s CPU time.

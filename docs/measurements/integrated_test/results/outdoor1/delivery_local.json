@@ -1,0 +1,48 @@
+{
+  "attempt_failed": 1,
+  "attempt_ok_201": 69,
+  "attempt_ok_unique": 69,
+  "attempted_not_ok": 0,
+  "attempted_unique": 69,
+  "attempts": 70,
+  "by_session": {
+    "1": {
+      "attempt_failed": 0,
+      "attempt_ok_201": 17,
+      "attempts": 17,
+      "phase": "session_1",
+      "scheduled": 17,
+      "scheduled_unique": 17
+    },
+    "2": {
+      "attempt_failed": 0,
+      "attempt_ok_201": 18,
+      "attempts": 18,
+      "phase": "session_2",
+      "scheduled": 17,
+      "scheduled_unique": 17
+    },
+    "3": {
+      "attempt_failed": 1,
+      "attempt_ok_201": 19,
+      "attempts": 20,
+      "phase": "session_3",
+      "scheduled": 20,
+      "scheduled_unique": 20
+    }
+  },
+  "dropped": 0,
+  "enabled": true,
+  "events": 138,
+  "http_statuses": {
+    "201": 69,
+    "502": 1
+  },
+  "note": "HTTP 201 means the Edge Function accepted the message; it is not proof of a Supabase row. Run tools/analyze_integrated_test.py with Supabase URL/key to match message IDs against public.telemetry.",
+  "rtt_ms_median": 1187.752,
+  "scheduled": 68,
+  "scheduled_not_attempted": 0,
+  "scheduled_unique": 68,
+  "supabase_checked": false,
+  "trace_path": "<PI_APP_DIR>/logs/integrated/run_20261023T064747Z_outdoor1/telemetry_trace.jsonl"
+}

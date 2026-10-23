@@ -41,7 +41,9 @@ Boot-campaign workflow (recommended for "power on then record")
 The unit is enabled but does nothing on normal boots unless BOOT_STATE.json
 exists.  At the end of the three sessions it writes BOOT_STATE.done.json and
 removes the armed state, so later power cycles are normal.  The app is left
-running and the dashboard remains available.
+running and the dashboard remains available.  Before sessions, the pre phase
+waits for three fresh GPS samples (not a last-known position), up to 15 minutes
+by default; a timeout aborts the run without starting any session.
 
 Artifacts (unique run folder under logs/integrated/)
 ----------------------------------------------------
@@ -89,6 +91,7 @@ LCD_URL = "http://127.0.0.1:8080/test/lcd"
 MAX_TEMP_C = 86.0
 MIN_DISK_MB = 100.0
 LCD_COLS = 16
+GPS_FIX_HOLD_SAMPLES = 3
 
 _stop = {"flag": False, "reason": None}
 
@@ -248,6 +251,44 @@ def _float(v):
         return float(v)
     except (TypeError, ValueError):
         return None
+
+
+def has_fresh_gps_fix(data):
+    lat = _float(data.get("latitude"))
+    lon = _float(data.get("longitude"))
+    return (
+        _truthy(data.get("fix_valid"))
+        and not _truthy(data.get("using_last_known"))
+        and lat is not None
+        and lon is not None
+        and math.isfinite(lat)
+        and math.isfinite(lon)
+        and -90 <= lat <= 90
+        and -180 <= lon <= 180
+    )
+
+
+class FreshGpsFixGate:
+    def __init__(self, required_samples=GPS_FIX_HOLD_SAMPLES):
+        self.required_samples = required_samples
+        self.consecutive_samples = 0
+        self.last_updated_at = None
+
+    @property
+    def ready(self):
+        return self.consecutive_samples >= self.required_samples
+
+    def observe(self, sample):
+        if not has_fresh_gps_fix(sample):
+            self.consecutive_samples = 0
+            self.last_updated_at = None
+            return False
+
+        updated_at = sample.get("source_updated_at")
+        if updated_at and updated_at != self.last_updated_at:
+            self.consecutive_samples += 1
+            self.last_updated_at = updated_at
+        return self.ready
 
 
 def _int(v):
@@ -461,7 +502,7 @@ class Recorder:
 def _lcd_for_phase(lcd, phase, session, total, remaining, d):
     if phase.startswith("pre"):
         line1 = f"PRE {int(remaining):3d}s"
-        line2 = "WAIT FOR GPS"
+        line2 = "GPS FIX OK" if has_fresh_gps_fix(d) else "WAIT FOR GPS"
     elif phase.startswith("gap"):
         line1 = f"NEXT {session}/{total} {int(remaining):3d}s"
         line2 = "PREP / WALK"
@@ -481,10 +522,12 @@ def _lcd_for_phase(lcd, phase, session, total, remaining, d):
 
 
 def run_phase(recorder, lcd, phases, phases_path, name, session, duration,
-              total, args):
+              total, args, gps_wait_sec=None):
     start = now_utc()
     start_epoch = time.time()
     end_epoch = start_epoch + duration
+    gps_gate = FreshGpsFixGate() if gps_wait_sec is not None else None
+    gps_deadline = start_epoch + gps_wait_sec if gps_gate else None
     phase = {
         "name": name,
         "session": session,
@@ -496,6 +539,14 @@ def run_phase(recorder, lcd, phases, phases_path, name, session, duration,
         "actual_end_utc": None,
         "actual_end_epoch": None,
     }
+    if gps_gate:
+        phase.update({
+            "gps_gate_required": True,
+            "gps_wait_timeout_sec": gps_wait_sec,
+            "gps_fix_samples_required": gps_gate.required_samples,
+            "gps_fix_ready": False,
+            "gps_fix_ready_utc": None,
+        })
     phases.append(phase)
     write_json(phases_path, {"phases": phases})
     print(f"\n>>> {name.upper()} {session}/{total} {duration}s  "
@@ -507,10 +558,25 @@ def run_phase(recorder, lcd, phases, phases_path, name, session, duration,
     last_lcd = 0.0
     last_temp = 0.0
     try:
-        while time.time() < end_epoch and not _stop["flag"]:
+        while ((time.time() < end_epoch or (gps_gate and not gps_gate.ready))
+               and not _stop["flag"]):
             now = time.time()
+            if gps_gate and now >= gps_deadline and not gps_gate.ready:
+                _stop["flag"] = True
+                _stop["reason"] = (
+                    f"fresh GPS fix not acquired within {gps_wait_sec} seconds; "
+                    "no measurement sessions started"
+                )
+                phase["gps_wait_timed_out"] = True
+                print(_stop["reason"])
+                break
             if now >= next_sample:
-                recorder.sample(name, session, start_epoch)
+                row = recorder.sample(name, session, start_epoch)
+                if gps_gate and gps_gate.observe(row):
+                    phase["gps_fix_ready"] = True
+                    phase["gps_fix_ready_utc"] = row.get("timestamp_utc")
+                    print(f"fresh GPS fix confirmed for {gps_gate.required_samples} "
+                          f"consecutive samples at {phase['gps_fix_ready_utc']}")
                 next_sample += 1.0
                 if next_sample < now:
                     next_sample = now + 1.0
@@ -523,8 +589,10 @@ def run_phase(recorder, lcd, phases, phases_path, name, session, duration,
                     _stop["reason"] = f"SoC {t} C above {args.max_temp} C"
                 last_temp = now
             if now - last_lcd >= 5.0:
+                display_end = (gps_deadline if gps_gate and not gps_gate.ready
+                               else end_epoch)
                 _lcd_for_phase(lcd, name, session, total,
-                               max(0, end_epoch - now), recorder.last)
+                               max(0, display_end - now), recorder.last)
                 last_lcd = now
             time.sleep(0.2)
     finally:
@@ -741,6 +809,8 @@ def plan_from_args(args):
         "pre_sec": args.pre_sec,
         "post_sec": args.post_sec,
         "boot_delay": args.boot_delay,
+        "gps_wait_sec": args.gps_wait_sec,
+        "gps_fix_hold_samples": GPS_FIX_HOLD_SAMPLES,
         "trace": not args.no_trace,
         "lcd": not args.no_lcd,
         "label": args.label,
@@ -797,9 +867,10 @@ def run_campaign(cfg, run_dir, mode):
         recorder = Recorder(os.path.join(run_dir, "samples.csv"))
         run_start_epoch = time.time()
 
-        if cfg["pre_sec"]:
+        if cfg["pre_sec"] or cfg.get("gps_wait_sec", 900):
             run_phase(recorder, lcd, phases, phases_path, "pre", 0,
-                      cfg["pre_sec"], cfg["sessions"], _ArgsView(cfg))
+                      cfg["pre_sec"], cfg["sessions"], _ArgsView(cfg),
+                      gps_wait_sec=cfg.get("gps_wait_sec", 900))
         for n in range(1, cfg["sessions"] + 1):
             if _stop["flag"]:
                 break
@@ -836,8 +907,11 @@ def run_campaign(cfg, run_dir, mode):
         # A final overlay is best-effort after the app has restarted.
         try:
             lcd.reset()
-            lcd.show(f"{cfg['sessions']}/{cfg['sessions']} DONE" if not aborted else "TEST ABORTED",
-                     "PULL LOGS" if not aborted else "SEE JOURNAL", force=True)
+            if aborted and "GPS fix not acquired" in aborted:
+                lcd.show("GPS WAIT TIMEOUT", "NO SESSIONS RUN", force=True)
+            else:
+                lcd.show(f"{cfg['sessions']}/{cfg['sessions']} DONE" if not aborted else "TEST ABORTED",
+                         "PULL LOGS" if not aborted else "SEE JOURNAL", force=True)
         except Exception:
             pass
 
@@ -935,7 +1009,7 @@ SupplementaryGroups=dialout gpio
 WorkingDirectory={app}
 Environment=PYTHONUNBUFFERED=1
 ExecStart={python} {app}/tools/run_integrated_test.py --boot
-TimeoutStartSec=1800
+TimeoutStartSec=3600
 Nice=5
 
 [Install]
@@ -976,6 +1050,9 @@ def arm(cfg):
     print(f"armed: {run_dir}")
     print(f"power-cycle now. Boot runs {cfg['sessions']} sessions x "
           f"{cfg['session_sec']}s, gap {cfg['gap_sec']}s, boot delay {cfg['boot_delay']}s.")
+    print(f"pre-session waits for {cfg.get('gps_fix_hold_samples', GPS_FIX_HOLD_SAMPLES)} "
+          f"fresh GPS samples (max {cfg.get('gps_wait_sec', 900)}s); "
+          "sessions will not start without a fresh fix.")
     print("The LCD shows the session and final result; the dashboard remains available.")
     return 0
 
@@ -1001,7 +1078,20 @@ def boot_campaign():
             pass
         print("integrated test: campaign complete; disarmed for future boots.")
     else:
-        print("integrated test: campaign failed; state left armed for a retry.")
+        result = read_json(os.path.join(state["run_dir"], "summary.json"), {})
+        if "fresh GPS fix not acquired" in str(result.get("aborted", "")):
+            state["armed"] = False
+            state["completed_utc"] = utc_iso()
+            state["aborted"] = result["aborted"]
+            write_json(DONE_PATH, state)
+            try:
+                os.remove(STATE_PATH)
+            except OSError:
+                pass
+            print("integrated test: GPS gate timed out; disarmed without starting "
+                  "sessions. Fix the GPS/power issue, then arm a new run.")
+        else:
+            print("integrated test: campaign failed; state left armed for a retry.")
     return rc
 
 
@@ -1029,6 +1119,8 @@ def main():
                     help="seconds per session (default 150; 2-3 min)")
     ap.add_argument("--gap-sec", type=int, default=30)
     ap.add_argument("--pre-sec", type=int, default=20)
+    ap.add_argument("--gps-wait-sec", type=int, default=900,
+                    help="maximum pre-session wait for a fresh GPS fix; sessions are skipped on timeout")
     ap.add_argument("--post-sec", type=int, default=10)
     ap.add_argument("--boot-delay", type=int, default=20)
     ap.add_argument("--max-start-temp", type=float, default=80.0)
@@ -1048,6 +1140,8 @@ def main():
     if args.arm:
         if args.sessions < 1 or args.session_sec < 30:
             sys.exit("invalid plan: need >=1 session and >=30 s per session")
+        if args.gps_wait_sec < 1:
+            sys.exit("invalid plan: --gps-wait-sec must be at least 1")
         return arm(plan_from_args(args))
     if args.disarm:
         return disarm()
@@ -1058,6 +1152,8 @@ def main():
         sys.exit(f"{STATE_PATH} is armed; use --boot/--disarm or remove it before a manual run")
     if args.sessions < 1 or args.session_sec < 30:
         sys.exit("invalid plan: need >=1 session and >=30 s per session")
+    if args.gps_wait_sec < 1:
+        sys.exit("invalid plan: --gps-wait-sec must be at least 1")
     cfg = plan_from_args(args)
     run_dir = new_run_dir(cfg["label"])
     return run_campaign(cfg, run_dir, "manual")

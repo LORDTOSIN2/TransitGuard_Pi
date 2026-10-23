@@ -51,10 +51,13 @@ explains the artifacts and how to reproduce them.
 > **An integrated outdoor harness** is ready in
 > [`integrated_test/`](integrated_test/): one power-on, three 2.5-minute
 > sessions, with the app and dashboard left running, 1 Hz GPS/fatigue/alcohol
-> sampling, LCD progress, and optional per-message telemetry tracing reconciled
-> against Supabase. The harness has been smoke-tested only; **no outdoor
-> three-session result is committed yet**. Raw samples include GPS coordinates,
-> so review privacy before publishing.
+> sampling, LCD progress, and optional per-message telemetry tracing. Two
+> outdoor campaigns were completed on 2026-10-23. The first had no fresh GPS
+> fix; the second waited for a fresh fix and then recorded **100% availability
+> in all three sessions**. The integrated report and privacy-redacted evidence
+> are in [`integrated_test/report.md`](integrated_test/report.md) and
+> [`integrated_test/results/`](integrated_test/results/). Published sample
+> copies omit exact coordinates; full pulled samples remain local only.
 
 
 ## Naming

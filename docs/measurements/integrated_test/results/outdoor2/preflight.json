@@ -1,0 +1,35 @@
+{
+  "active_ssid": "<redacted>",
+  "boot_id": "7fb04255-fd07-47d1-8add-515ffb9ede53",
+  "camera_devices": [
+    "video0",
+    "video1",
+    "video10",
+    "video11",
+    "video12",
+    "video13",
+    "video14",
+    "video15",
+    "video16",
+    "video18",
+    "video19",
+    "video20",
+    "video21",
+    "video22",
+    "video23",
+    "video31"
+  ],
+  "disk_free_mb": 691.1,
+  "heartbeat": {
+    "alcohol_ratio": 5.740073152878984,
+    "driver_state": "NORMAL",
+    "fix_valid": false,
+    "updated_at": "10:44:07"
+  },
+  "ip_address": "<redacted>",
+  "service_active": "active",
+  "started_utc": "2026-10-23T09:44:06Z",
+  "temp_c": 48.2,
+  "throttled": "0x50005",
+  "uptime_s": 89.86
+}

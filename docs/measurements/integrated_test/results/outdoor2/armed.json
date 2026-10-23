@@ -1,0 +1,21 @@
+{
+  "armed": true,
+  "armed_utc": "2026-10-23T08:26:26Z",
+  "mode": "integrated-one-boot",
+  "plan": {
+    "boot_delay": 60,
+    "gap_sec": 30,
+    "gps_fix_hold_samples": 3,
+    "gps_wait_sec": 900,
+    "label": "outdoor2",
+    "lcd": true,
+    "max_start_temp": 80.0,
+    "max_temp": 86.0,
+    "post_sec": 10,
+    "pre_sec": 20,
+    "session_sec": 150,
+    "sessions": 3,
+    "trace": true
+  },
+  "run_dir": "<PI_APP_DIR>/logs/integrated/run_20261023T082626Z_outdoor2"
+}

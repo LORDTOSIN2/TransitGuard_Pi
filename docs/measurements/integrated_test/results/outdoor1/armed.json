@@ -1,0 +1,19 @@
+{
+  "armed": true,
+  "armed_utc": "2026-10-23T06:47:47Z",
+  "mode": "integrated-one-boot",
+  "plan": {
+    "boot_delay": 60,
+    "gap_sec": 30,
+    "label": "outdoor1",
+    "lcd": true,
+    "max_start_temp": 80.0,
+    "max_temp": 86.0,
+    "post_sec": 10,
+    "pre_sec": 20,
+    "session_sec": 150,
+    "sessions": 3,
+    "trace": true
+  },
+  "run_dir": "<PI_APP_DIR>/logs/integrated/run_20261023T064747Z_outdoor1"
+}

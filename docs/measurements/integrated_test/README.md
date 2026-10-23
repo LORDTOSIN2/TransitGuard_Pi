@@ -8,24 +8,37 @@ sensor stack.
 
 ## Current status
 
-The harness and the app's local LCD-overlay endpoint are deployed and were
-validated with short indoor smoke runs on 2026-10-23. **No outdoor campaign
-result is committed yet.** The smoke runs were only checks that sampling,
-LCD updates, trace switching and Supabase reconciliation work; they are not
-GPS, alcohol, fatigue or delivery evidence.
+The indoor smoke runs validated sampling, LCD updates, trace switching and
+Supabase reconciliation plumbing; they are not sensor or delivery evidence.
+Two outdoor integrated campaigns were completed on 2026-10-23. The first
+obtained no fresh GPS fix during its sessions. The second used the fresh-fix
+gate added after that failure, waited 8 min 41 s for the fix, and then recorded
+three sessions with 100% fresh-fix availability in each.
+
+See the compiled [integrated test report](./report.md) and the
+[privacy-redacted outdoor results](./results/). Exact latitude/longitude
+columns and local SSID/IP values are retained only in the local pulled copies
+under `raw/`; they are intentionally omitted from the public results.
+
+The second run also recorded active undervoltage/throttling (`0x50005`) and a
+peak SoC temperature of 81.3 C. Review the report's caveats before interpreting
+these runs; the follow-up campaign does not establish GPS accuracy or prove the
+cause of the first run's lack of fix.
 
 ## What one run does
 
-One invocation (or one armed boot) runs:
+One invocation (or one armed boot), after the GPS gate is satisfied, runs:
 
 ```
-20 s pre  ->  150 s session 1  ->  30 s gap
+20 s minimum pre -> 150 s session 1 -> 30 s gap
           ->  150 s session 2  ->  30 s gap
           ->  150 s session 3  ->  10 s post
 ```
 
-These are defaults; each session must stay in the short 2-3 minute range used
-for this test. The app stays in charge of the camera, GPS UART, ADS1115/MQ-3,
+The pre phase waits for the GPS gate even if its minimum 20 seconds have
+elapsed. The wait is bounded by `--gps-wait-sec` (default 900 seconds). Each
+session stays in the short 2-3 minute range used for this test. The app stays
+in charge of the camera, GPS UART, ADS1115/MQ-3,
 buzzer and LCD. The harness only polls the app's existing `GET /data` endpoint
 once per second, so it cannot take the serial port or camera away from the app.
 
@@ -56,14 +69,15 @@ state file is armed, so ordinary power cycles are unaffected.
 ssh john@john.local
 cd /home/john/fatigue
 
-# 1. Arm the next power-on. 60 s gives the app time to open the camera and
-#    lets you carry the Pi/antenna outdoors before session 1 starts.
+# 1. Refresh the installed unit if the harness was updated, then arm the next
+#    power-on. The GPS gate prevents session 1 from starting without a fresh fix.
+./fatigue-env/bin/python3 tools/run_integrated_test.py --install
 ./fatigue-env/bin/python3 tools/run_integrated_test.py --arm \
     --sessions 3 --session-sec 150 --gap-sec 30 --boot-delay 60 \
-    --label outdoor1
+    --gps-wait-sec 900 --label outdoor2
 
 # 2. Power off, move the Pi/antenna outdoors, power on.
-#    Wait for "3/3 DONE / PULL LOGS" on the LCD.
+#    Wait for the fresh-fix confirmation, then "3/3 DONE / PULL LOGS" on the LCD.
 #    Dashboard: http://john.local:8080
 
 # 3. Optional: cancel an armed run before power cycling.
@@ -71,8 +85,10 @@ cd /home/john/fatigue
 ```
 
 A successful run writes `BOOT_STATE.done.json` and removes `BOOT_STATE.json`;
-later power cycles are normal. A failed run leaves the state armed so a retry is
-possible, but check the journal and battery/thermal state first.
+later power cycles are normal. Other failed runs leave the state armed so a
+retry is possible. A GPS wait timeout is recorded as an aborted run, writes the
+completion marker, disarms the campaign, and starts no measured sessions;
+correct the antenna/sky-view or power issue before explicitly arming a new run.
 
 The boot unit is:
 
@@ -94,8 +110,11 @@ If the Pi is already outdoors and reachable over SSH, start the same plan now:
 ```bash
 cd /home/john/fatigue
 ./fatigue-env/bin/python3 tools/run_integrated_test.py \
-    --sessions 3 --session-sec 150 --gap-sec 30 --label outdoor-manual
+    --sessions 3 --session-sec 150 --gap-sec 30 --gps-wait-sec 900 \
+    --label outdoor-manual
 ```
+
+The fresh-fix gate also applies to manual runs.
 
 The harness refuses to start above `--max-start-temp` (default 80 C), above the
 hard 86 C limit, with less than 100 MB free, without a camera device, or if the
@@ -118,6 +137,12 @@ Each run gets a unique folder under `logs/integrated/run_<UTC>_<label>/`:
 | `summary.json` | per-session and overall summaries, caveats and non-claims |
 | `postflight.json` | service/data state, temperature, throttling, trace cleanup |
 | `delivery_supabase.json` | written later by the analyzer; message-ID-to-Supabase reconciliation |
+
+Public result copies omit precise coordinates, local SSIDs/IPs, and per-message
+telemetry IDs. The original pulled logs remain in the local `raw/` directories
+for authorized analysis. See [report.md](./report.md) for the published
+per-session comparison and links to the sanitized summaries, samples and
+harness logs.
 
 The sample columns cover:
 
@@ -213,9 +238,10 @@ metrology experiment:
   separate workload/placement runs.
 - Under-voltage/throttling (`get_throttled`) must be reported; a run is not
   "clean" if the bitmask is non-zero.
-- Raw `samples.csv` contains **GPS coordinates**. Review privacy before
-  publishing; the separate GPS campaign deliberately retained no coordinates.
-  No video or images are retained.
+- The original local `samples.csv` contains **GPS coordinates**. Published
+  result copies blank the latitude/longitude columns; the separate GPS
+  availability campaign deliberately retained no coordinates. No video or
+  images are retained.
 - Network delivery can be delayed by the SQLite buffer. A message missing from
   the query window may arrive later; the report says so and should not be read
   as permanent loss without checking the buffer.

@@ -1,0 +1,13 @@
+{
+  "aborted": null,
+  "data_updated_at": "11:02:18",
+  "disk_free_mb": 690.7,
+  "finished_utc": "2026-10-23T10:02:18Z",
+  "lcd_endpoint_ok": true,
+  "lcd_error": null,
+  "service_active": "active",
+  "stop_reason": null,
+  "temp_c": 78.4,
+  "throttled": "0x50005",
+  "trace_dropin_exists": false
+}
