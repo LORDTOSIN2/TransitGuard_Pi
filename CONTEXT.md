@@ -138,10 +138,12 @@ ssh john@10.80.3.194 "echo $b64 | base64 -d | bash"
 **If the address changes:** `10.80.3.194` belongs to the SFM hotspot subnet. Switch networks
 (§5) and the address changes; also check the LCD, which shows the IP on boot.
 
-**Current DHCP address (2026-10-22/23):** the Pi was on the **Redmi 14C** hotspot at
-`10.159.123.212` (MAC `e4:5f:01:0b:b7:ce`). The host key is the same Pi; after a
-power cycle find the address with `arp -a | findstr e4-5f-01` and connect with
-`ssh -o StrictHostKeyChecking=accept-new john@<ip>`.
+**Current network (2026-10-23):** the Pi is on **SFM MBB - CONF** at
+`10.80.3.194`, also reachable as `john.local` (mDNS; same host key). It previously
+appeared on the **Redmi 14C** hotspot at `10.159.123.212` (MAC
+`e4:5f:01:0b:b7:ce`); the address follows the active hotspot. If neither name nor
+address works, find it with `arp -a | findstr e4-5f-01` or `ping john.local` and
+connect with `ssh -o StrictHostKeyChecking=accept-new john@<ip>`.
 
 ---
 
@@ -374,6 +376,14 @@ v2.1 outage-recovery recheck was run on 2026-10-22 after these sessions:
    present *now*, throttling has occurred, and the thermal soft limit has engaged. SoC idles
    around 74 °C with the camera running. Treat long measurement runs accordingly, record the
    readings, and do not describe a run as clean when this bitmask is non-zero.
+8. **MQ-3 alcohol-vapor smoke test (2026-10-23).** Two manual alcohol exposures were
+   recorded at 1 Hz through the running app's `/data` endpoint. The clean-air ratio had a
+   median of 7.90; the two episodes reached 0.684 and 1.324, with 30 samples in
+   `ALCOHOL_ALERT`, and the sensor recovered above the alert threshold. This is a
+   **relative vapor response only** - no calibrated concentration, BAC/BrAC or accuracy
+   claim. Raw CSV and caveats are in
+   [`docs/measurements/alcohol_smoke/`](docs/measurements/alcohol_smoke/); the passive
+   recorder is `tools/record_alcohol_test.py`.
 
 ---
 

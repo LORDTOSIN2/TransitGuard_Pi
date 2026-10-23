@@ -40,6 +40,13 @@ explains the artifacts and how to reproduce them.
 > a clean open-sky benchmark. UBX reset was not acknowledged, so these are
 > power-cycle starts, not verified cold starts. Availability/TTFF only - no
 > surveyed reference, so no position-accuracy claim.
+>
+> **An MQ-3 alcohol-vapor response smoke test** is in
+> [`alcohol_smoke/`](alcohol_smoke/): two manual alcohol exposures, 1 Hz
+> `/data` recording. The ratio fell from a clean-air median of **7.90** to
+> **0.684** (episode 1) and **1.324** (episode 2), with 30 samples in
+> `ALCOHOL_ALERT`; the sensor recovered above the alert threshold. **Relative
+> response only** - no calibrated alcohol level, BAC/BrAC or accuracy claim.
 
 ## Naming
 

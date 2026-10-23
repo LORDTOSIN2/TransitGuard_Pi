@@ -1,0 +1,21 @@
+{
+  "alert_samples": 30,
+  "alert_threshold": 2.5,
+  "caution_threshold": 4.0,
+  "csv": "/home/john/fatigue/logs/alcohol_test_20261023_manual.csv",
+  "duration_s": 560.08,
+  "fetch_errors": 0,
+  "finished_utc": "2026-10-23T06:07:17Z",
+  "first_alert_utc": "2026-10-23T06:01:42Z",
+  "last_alert_utc": "2026-10-23T06:05:50Z",
+  "note": "relative MQ-3 ratio only; no BAC/BrAC or calibrated ppm claim",
+  "ratio_last": 6.712285812298337,
+  "ratio_max": 8.169842447880876,
+  "ratio_mean": 6.3919,
+  "ratio_min": 0.6844767750265903,
+  "ratio_min_utc": "2026-10-23T06:01:45Z",
+  "ratio_n": 560,
+  "samples": 560,
+  "started_utc": "2026-10-23T05:57:56Z",
+  "url": "http://127.0.0.1:8080/data"
+}
