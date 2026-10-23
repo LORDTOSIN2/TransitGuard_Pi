@@ -203,6 +203,8 @@ way to view the feed remotely instead.
 - `export_messages.py` — one-row-per-message CSV export, reconciled with the DB
 - `measure_fps.py` — client-side frame rate of `/video_feed` (frames/s, JPEG dimensions, inter-frame gaps)
 - `wifi_latency_test.py` — ICMP / TCP / HTTP latency and PDR sweeps, idle vs. under video load; writes `wifi_latency_results.csv` to the working directory (lab hosts are constants at the top of the file)
+- `run_integrated_test.py` — three short outdoor sessions (GPS + camera metrics + MQ-3 + optional telemetry trace) with the app/dashboard kept running, boot-armed or manual
+- `analyze_integrated_test.py` — matches the integrated run's telemetry message IDs to Supabase `telemetry` rows and writes `delivery_supabase.json`
 
 ## Measuring connection stability
 
@@ -343,6 +345,40 @@ metrics only (no coordinates), and leaves `T<n> DONE <ttff>s / POWER OFF` on the
 trial. See
 [`docs/measurements/gps_open_sky/README.md`](docs/measurements/gps_open_sky/README.md).
 Availability/TTFF only — no surveyed reference, so no position-accuracy claim.
+
+### Integrated outdoor session (GPS + fatigue + alcohol + delivery)
+
+`tools/run_integrated_test.py` runs three 150 s sessions from one power-on while
+the app and dashboard stay up. It polls the app's existing `/data` endpoint, so
+the camera, GPS UART, ADS1115/MQ-3 and LCD remain owned by the app. The 16×2 LCD
+shows session time, GPS satellite count and alcohol ratio; the app's normal
+driver-state display still takes over on state changes. A local-only
+`POST /test/lcd` endpoint is used for the overlay and cannot be reached from the
+LAN.
+
+```bash
+# on the Pi: install the inert boot unit once, then arm the next power-on
+./fatigue-env/bin/python3 tools/run_integrated_test.py --install
+./fatigue-env/bin/python3 tools/run_integrated_test.py --arm \
+    --sessions 3 --session-sec 150 --gap-sec 30 --boot-delay 30 --label outdoor1
+
+# power off/on, move outdoors, wait for "3/3 DONE / PULL LOGS" on the LCD
+# then pull the run folder and reconcile message IDs with Supabase:
+python tools/analyze_integrated_test.py <run_dir> \
+    --supabase-url https://<project-ref>.supabase.co \
+    --supabase-key <publishable/anon key>
+```
+
+With tracing enabled (default), the harness restarts the app once before the
+sessions and once afterwards to install/remove a temporary
+`TELEMETRY_TRACE_PATH` drop-in; the dashboard is available during the recorded
+sessions. `--no-trace` avoids both restarts but loses message-ID delivery
+matching. See
+[`docs/measurements/integrated_test/README.md`](docs/measurements/integrated_test/README.md)
+for artifacts and non-claims. Raw samples include GPS coordinates; review
+privacy before publishing. This is availability/function evidence, not a
+position-accuracy, fatigue-accuracy, alcohol-concentration or fleet-reliability
+claim.
 
 ## Known gaps vs. original project objectives
 

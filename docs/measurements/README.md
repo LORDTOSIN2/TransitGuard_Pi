@@ -48,6 +48,15 @@ explains the artifacts and how to reproduce them.
 > `ALCOHOL_ALERT`; the sensor recovered above the alert threshold. **Relative
 > response only** - no calibrated alcohol level, BAC/BrAC or accuracy claim.
 
+> **An integrated outdoor harness** is ready in
+> [`integrated_test/`](integrated_test/): one power-on, three 2.5-minute
+> sessions, with the app and dashboard left running, 1 Hz GPS/fatigue/alcohol
+> sampling, LCD progress, and optional per-message telemetry tracing reconciled
+> against Supabase. The harness has been smoke-tested only; **no outdoor
+> three-session result is committed yet**. Raw samples include GPS coordinates,
+> so review privacy before publishing.
+
+
 ## Naming
 
 The measurement tools (`tools/analyze_session.py`, `tools/export_messages.py`,

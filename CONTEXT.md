@@ -82,11 +82,12 @@ the IoT repo's [`CONTEXT.md`](https://github.com/LORDTOSIN2/TransitGuard-IoT/blo
 |---|---|
 | `GET /` | HTML dashboard (live video + metrics) |
 | `GET /video_feed` | MJPEG stream |
-| `GET /data` | JSON metrics: `driver_state`, `ear/mar/perclos/pitch`, `latitude/longitude/fix_valid`, `sats_used/sats_in_view/best_snr/fix_quality`, `buffer_count`, `alert_coalesced`, `pi_temperature`, `pi_temp_level`, `pi_throttled`, `updated_at` |
+| `GET /data` | JSON metrics: `driver_state`, `ear/mar/perclos/pitch`, `latitude/longitude/fix_valid`, `sats_used/sats_in_view/best_snr/fix_quality`, `hdop/altitude_m/speed_kmh`, `buffer_count`, `alert_coalesced`, `pi_temperature`, `pi_temp_level`, `pi_throttled`, `updated_at` |
 | `GET /wifi/status` | Current SSID + which network the switch button would target |
 | `POST /wifi/switch` | Performs the Wi-Fi switch (see §5) |
 | `GET /temperature` (alias `/temp`) | Dedicated Pi SoC temperature page — big colour-coded readout, throttling note, HOT banner |
 | `GET /temperature/data` | JSON feed for that page: `temperature`, `level`, `throttled`, `note`, `updated_at` |
+| `POST /test/lcd` | **Local-only test overlay** (`line1`, `line2`); used by the integrated harness. It does not change driver state or telemetry and is not reachable from the LAN. |
 
 `/data.updated_at` is the **main-loop heartbeat**. If it is `null`, the loop is not running
 (usually a camera problem) and no telemetry is being produced at all.
@@ -384,6 +385,17 @@ v2.1 outage-recovery recheck was run on 2026-10-22 after these sessions:
    claim. Raw CSV and caveats are in
    [`docs/measurements/alcohol_smoke/`](docs/measurements/alcohol_smoke/); the passive
    recorder is `tools/record_alcohol_test.py`.
+9. **Integrated outdoor harness (2026-10-23).** `tools/run_integrated_test.py` and
+   `tg-integrated-test.service` are installed on the Pi; the unit is **inert until
+   armed** with `--arm`. It runs three short sessions from one power-on, polls the
+   app's `/data` endpoint at 1 Hz, and uses the local-only `POST /test/lcd` endpoint
+   for session/LCD progress. With tracing enabled (default) it installs a temporary
+   `TELEMETRY_TRACE_PATH` drop-in and restarts the app once before/after the
+   sessions; the dashboard remains up during the sessions. The app now exposes
+   `hdop`, `altitude_m` and `speed_kmh` in `/data` and serialises all LCD writers
+   with `lcd_io_lock`. The harness was smoke-tested indoors only; no outdoor
+   three-session result is committed. Raw samples contain coordinates. Details and
+   non-claims: [`docs/measurements/integrated_test/`](docs/measurements/integrated_test/).
 
 ---
 

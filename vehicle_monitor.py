@@ -88,7 +88,7 @@ import shlex
 from collections import deque
 
 import requests
-from flask import Flask, Response, jsonify, render_template_string
+from flask import Flask, Response, jsonify, render_template_string, request
 
 try:
     import psutil
@@ -1411,6 +1411,11 @@ actuator_lock = threading.Lock()
 latest_actuator = {"buzzer_active": False, "lcd_message": None}
 actuator_queue = queue.Queue(maxsize=5)
 
+# The LCD is bit-banged, so all writers must serialise.  The normal actuator
+# thread and the local-only test overlay endpoint share this lock.
+lcd_io_lock = threading.Lock()
+active_lcd = {"lcd": None}
+
 
 def get_ip_address():
     """
@@ -1482,11 +1487,12 @@ def display_on_lcd(lcd, line1, line2):
     if lcd is None:
         return
     try:
-        lcd.clear()
-        lcd.cursor_pos = (0, 0)
-        lcd.write_string(line1[:LCD_COLS])
-        lcd.cursor_pos = (1, 0)
-        lcd.write_string(line2[:LCD_COLS])
+        with lcd_io_lock:
+            lcd.clear()
+            lcd.cursor_pos = (0, 0)
+            lcd.write_string(line1[:LCD_COLS])
+            lcd.cursor_pos = (1, 0)
+            lcd.write_string(line2[:LCD_COLS])
     except Exception as e:
         print(f"LCD write failed: {e}")
 
@@ -1529,6 +1535,7 @@ latest_metrics = {
     "latitude": None, "longitude": None, "fix_valid": False,
     "using_last_known": False, "location_age_sec": None,
     "sats_used": None, "sats_in_view": None, "best_snr": None, "fix_quality": None,
+    "hdop": None, "altitude_m": None, "speed_kmh": None,
     "alcohol_ratio": None, "alcohol_ppm": None,
     "network_online": True, "buffer_count": 0,
     "alert_coalesced": 0,
@@ -2588,6 +2595,27 @@ def dashboard_data():
     return jsonify(payload)
 
 
+@dashboard_app.route("/test/lcd", methods=["POST"])
+def dashboard_test_lcd():
+    """Local-only LCD overlay for an evaluation harness.
+
+    The normal app still owns the LCD and continues to write driver-state
+    messages.  A harness can refresh this overlay every few seconds to show
+    test/session information without stopping the app or the web server.
+    Localhost-only: this is not exposed as a remote control surface.
+    """
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return jsonify({"ok": False, "error": "local requests only"}), 403
+    lcd = active_lcd.get("lcd")
+    if lcd is None:
+        return jsonify({"ok": False, "error": "LCD unavailable"}), 503
+    data = request.get_json(silent=True) or {}
+    line1 = str(data.get("line1", ""))[:LCD_COLS]
+    line2 = str(data.get("line2", ""))[:LCD_COLS]
+    display_on_lcd(lcd, line1, line2)
+    return jsonify({"ok": True, "line1": line1, "line2": line2})
+
+
 @dashboard_app.route("/temperature")
 @dashboard_app.route("/temp")
 def dashboard_temperature():
@@ -2822,6 +2850,7 @@ def main():
     lora_thread.start()
 
     lcd = setup_lcd()
+    active_lcd["lcd"] = lcd
     buzzer_ready = setup_buzzer()
     if lcd is not None:
         time.sleep(LCD_BOOT_IP_DISPLAY_SEC)  # keep the IP address visible before it's overwritten
@@ -3061,6 +3090,9 @@ def main():
                 sats_in_view=location.get("sats_in_view"),
                 best_snr=location.get("best_snr"),
                 fix_quality=location.get("fix_quality"),
+                hdop=location.get("hdop"),
+                altitude_m=location.get("altitude_m"),
+                speed_kmh=_knots_to_kmh(location.get("speed_knots")),
                 alcohol_ratio=alcohol["ratio"], alcohol_ppm=alcohol["ppm"],
                 network_online=is_network_online(), buffer_count=buffer_count(),
                 telemetry_queue_size=telemetry_queue.qsize(),
